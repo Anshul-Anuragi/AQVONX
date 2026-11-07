@@ -1,0 +1,47 @@
+---
+title: PortalSnap Extension Guide
+product: portalsnap
+version: 1.8.0
+description: Complete documentation for PortalSnap PDF scanner and eligibility rules engine.
+---
+
+# PortalSnap Chrome Extension Guide
+
+PortalSnap streamlines tedious application processes across government portals, university admissions, and recruitment platforms.
+
+---
+
+## 1. Setup & Installation
+
+1. Add **PortalSnap** from the Chrome Web Store.
+2. Click the extension icon in your browser toolbar to link your AQVONX account.
+3. Import your Profile Vault (encrypted client-side JSON or PDF identity files).
+
+---
+
+## 2. Smart PDF Scanning
+
+PortalSnap uses a local WASM-based PDF parser to inspect identity documents and certificates without sending sensitive documents to external servers:
+
+- **Aadhaar / Passport / SSN**: Pre-extracts candidate legal name, date of birth, and identity numbers.
+- **Degree Marksheets**: Extracts cumulative GPA, graduation year, and degree major.
+- **Resumes & CVs**: Parses previous employers, job titles, and contact info.
+
+---
+
+## 3. Eligibility Verification Engine
+
+PortalSnap evaluates page input criteria against your profile before allowing form submission:
+
+```javascript
+// Sample PortalSnap criteria rule configuration
+{
+  "min_age": 18,
+  "max_age": 28,
+  "eligible_degrees": ["B.Tech", "B.E", "B.Sc", "MCA"],
+  "min_percentage": 60.0
+}
+```
+
+If a candidate does not meet the specified criteria, PortalSnap raises an alert in the HUD to prevent non-refundable registration fee loss.
+

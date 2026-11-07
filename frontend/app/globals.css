@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* White Mode Tokens */
+  --bg-main: #ffffff;
+  --card-bg: rgba(248, 250, 252, 0.75);
+  --card-border: rgba(226, 232, 240, 0.8);
+  --text-main: #09090b;
+  --text-muted: #64748b;
+  --purple-glass: rgba(115, 5, 250, 0.10);
+  --purple-glass-border: rgba(115, 5, 250, 0.32);
+  --purple-glow: rgba(115, 5, 250, 0.22);
+}
+
+html.dark {
+  /* Deep Black & Midnight Tokens */
+  --bg-main: #050508;
+  --card-bg: rgba(13, 17, 28, 0.58);
+  --card-border: rgba(30, 41, 59, 0.65);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --purple-glass: rgba(115, 5, 250, 0.18);
+  --purple-glass-border: rgba(115, 5, 250, 0.45);
+  --purple-glow: rgba(115, 5, 250, 0.38);
+}
+
+/* Background Texture for Glassmorphism Contrast */
+.dark-grid-bg {
+  background-size: 38px 38px;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+}
+
+html:not(.dark) .dark-grid-bg {
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+}
+
+/* Typography Utility for Editorial Headings */
+.font-editorial {
+  font-family: var(--font-serif-heading), Georgia, serif;
+  letter-spacing: -0.015em;
+}
+
+/* Reusable Glass Card Utility */
+.glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--card-border);
+  border-radius: 1.25rem;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.45);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: var(--purple-glass-border);
+  box-shadow: 0 14px 40px -10px var(--purple-glow);
+}
+
+/* Purple Glassy Highlight Pill */
+.purple-glass-pill {
+  background: var(--purple-glass);
+  border: 1px solid var(--purple-glass-border);
+  backdrop-filter: blur(8px);
+  color: #c29dfc;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(115, 5, 250, 0.4);
+}

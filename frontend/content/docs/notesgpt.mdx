@@ -1,0 +1,71 @@
+---
+title: NotesGPT Extension Guide
+product: notesgpt
+version: 2.4.0
+description: Complete developer and user guide for NotesGPT real-time video transcript distiller.
+---
+
+# NotesGPT Chrome Extension Guide
+
+NotesGPT captures video frames and continuous audio transcript streams from any active browser tab (YouTube, Zoom Web, Google Meet, Coursera) and transmits them to the AQVONX FastAPI backend.
+
+---
+
+## 1. Key Features
+
+- **Continuous Multimodal Synthesis**: Captures both the lecture slide visual frame and audio subtitle buffer.
+- **Dynamic Vector SVG Flowcharts**: Generates an interactive visual progression map accompanying every note session.
+- **Direct Obsidian & Notion Paste**: Formatted with Callouts, LaTeX math blocks (`$$E=mc^2$$`), and structured sub-bullets.
+- **Sub-Second Streaming**: Powered by Google Gemini Flash 2.5 on the AQVONX server proxy.
+
+---
+
+## 2. Default Keyboard Shortcuts
+
+| Command | Shortcut (Mac) | Shortcut (Win/Linux) | Action |
+| :--- | :--- | :--- | :--- |
+| **Instant Note Snap** | `Cmd + Shift + N` | `Alt + Shift + N` | Captures current frame + last 60s transcript window |
+| **Generate Mind Map** | `Cmd + Shift + M` | `Alt + Shift + M` | Renders dynamic vector SVG flowchart |
+| **Toggle Side HUD** | `Cmd + Shift + Y` | `Alt + Shift + Y` | Opens or closes the NotesGPT extension panel |
+| **Copy Markdown** | `Cmd + Shift + C` | `Alt + Shift + C` | Copies markdown with Callout alerts to clipboard |
+
+---
+
+## 3. Server API Contract (`POST /api/v1/notes/generate`)
+
+The extension client makes a single authenticated POST request:
+
+```json
+{
+  "transcript_window": "In today's lecture on distributed hash tables, we explore consistent hashing...",
+  "frame_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+  "lang": "en",
+  "include_mindmap": true
+}
+```
+
+### Authorization Header
+```http
+Authorization: Bearer <AQVONX_JWT_TOKEN>
+```
+
+### Response Schema
+```json
+{
+  "markdown": "# Consistent Hashing\n\n### Core Concept\n...",
+  "key_takeaways": [
+    "Virtual nodes solve non-uniform key distribution",
+    "Chord rings allow O(log N) lookup hops"
+  ],
+  "svg_flowchart": "<svg viewBox='0 0 800 200'>...</svg>",
+  "daily_remaining": 249
+}
+```
+
+---
+
+## 4. Quotas & Upgrades
+
+- **Free Tier**: 5 generation calls per calendar day. Resets at 00:00 UTC.
+- **Pro Tier (₹149/mo)**: 250 calls per calendar day with dynamic SVG mind mapping and multi-language synthesis.
+
