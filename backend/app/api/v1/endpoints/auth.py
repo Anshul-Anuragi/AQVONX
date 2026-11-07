@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.db.models import User, Subscription, AuthUser, NotesGPTUser
 from app.core.config import settings
 from app.core.security import create_access_token, get_current_user_token
+from app.core.rate_limit import rate_limit_handshake
 
 router = APIRouter()
 
@@ -29,31 +30,34 @@ class ExtensionHandshakeResponse(BaseModel):
     role: str = "user"
 
 
-@router.post("/extension-token", response_model=ExtensionHandshakeResponse)
+@router.post("/extension-token", response_model=ExtensionHandshakeResponse, dependencies=[Depends(rate_limit_handshake)])
 async def extension_handshake(payload: ExtensionHandshakeRequest, db: AsyncSession = Depends(get_db)):
     """
     Chrome Extension authentication handshake.
     Retrieves or provisions the user profile and generates a signed JWT.
+    Rate limited to protect against brute-force harvesting.
     """
+    clean_email = payload.email.strip().lower()
+
     if not settings.is_database_configured:
         # Instant development / sandbox token generation
         dummy_id = str(uuid.uuid4())
-        user_role = "admin" if payload.email.startswith("admin") or payload.email == "developer@aqvonx.com" else "user"
+        user_role = "admin" if clean_email in settings.ADMIN_EMAILS else "user"
         token = create_access_token(
             subject=dummy_id,
-            extra_claims={"email": payload.email, "is_pro": False, "role": user_role}
+            extra_claims={"email": clean_email, "is_pro": False, "role": user_role}
         )
         return ExtensionHandshakeResponse(
             access_token=token,
             user_id=dummy_id,
-            email=payload.email,
+            email=clean_email,
             is_pro=False,
             role=user_role,
         )
 
     try:
         # 1. Check primary auth_users table
-        auth_stmt = select(AuthUser).where(AuthUser.email == payload.email)
+        auth_stmt = select(AuthUser).where(AuthUser.email == clean_email)
         auth_res = await db.execute(auth_stmt)
         auth_user = auth_res.scalars().first()
 
@@ -133,18 +137,18 @@ async def extension_handshake(payload: ExtensionHandshakeRequest, db: AsyncSessi
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         # Graceful fallback on connection drop
         dummy_id = str(uuid.uuid4())
-        user_role = "admin" if payload.email.startswith("admin") or payload.email == "developer@aqvonx.com" else "user"
+        user_role = "admin" if clean_email in settings.ADMIN_EMAILS else "user"
         token = create_access_token(
             subject=dummy_id,
-            extra_claims={"email": payload.email, "is_pro": False, "role": user_role}
+            extra_claims={"email": clean_email, "is_pro": False, "role": user_role}
         )
         return ExtensionHandshakeResponse(
             access_token=token,
             user_id=dummy_id,
-            email=payload.email,
+            email=clean_email,
             is_pro=False,
             role=user_role,
         )

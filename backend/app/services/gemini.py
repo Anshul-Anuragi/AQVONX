@@ -28,6 +28,9 @@ class GeminiService:
         Generate structured Markdown summary, key takeaways, and an SVG flowchart
         using Gemini Flash API without exposing the server key to the client.
         """
+        # AI-1: Prompt Injection Defense - sanitize delimiter break-outs
+        sanitized_transcript = transcript_window.replace("</TRANSCRIPT_WINDOW>", "[ESCAPED_TAG]")
+
         prompt = f"""
 You are AQVONX Notes Engine, an advanced AI technical knowledge distiller.
 Analyze the following media transcript and optional visual snapshot frame.
@@ -35,7 +38,7 @@ Target Language: {lang}
 
 Content to process:
 <TRANSCRIPT_WINDOW>
-{transcript_window}
+{sanitized_transcript}
 </TRANSCRIPT_WINDOW>
 
 Instructions:
@@ -90,7 +93,8 @@ You MUST return a valid JSON object matching this schema:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 # 1. Attempt primary model (gemini-2.0-flash)
                 response = await client.post(
-                    f"{self._get_url(self.primary_model)}?key={self.api_key}",
+                    self._get_url(self.primary_model),
+                    params={"key": self.api_key},
                     json=request_body,
                     headers={"Content-Type": "application/json"}
                 )
@@ -98,14 +102,15 @@ You MUST return a valid JSON object matching this schema:
                 # Fallback to gemini-1.5-flash if 404 or model unavailable
                 if response.status_code == 404:
                     response = await client.post(
-                        f"{self._get_url(self.fallback_model)}?key={self.api_key}",
+                        self._get_url(self.fallback_model),
+                        params={"key": self.api_key},
                         json=request_body,
                         headers={"Content-Type": "application/json"}
                     )
 
                 if response.status_code != 200:
-                    logger.error(f"Gemini API error {response.status_code}: {response.text}")
-                    return self._generate_fallback(transcript_window, api_error=response.text)
+                    logger.error(f"Gemini API error status code {response.status_code}")
+                    return self._generate_fallback(transcript_window)
 
                 result_json = response.json()
                 candidate_text = result_json["candidates"][0]["content"]["parts"][0]["text"]
@@ -113,8 +118,8 @@ You MUST return a valid JSON object matching this schema:
                 return parsed
 
         except Exception as e:
-            logger.error(f"Failed to communicate with Gemini API: {str(e)}")
-            return self._generate_fallback(transcript_window, api_error=str(e))
+            logger.error(f"Gemini inference dispatch error: {type(e).__name__}")
+            return self._generate_fallback(transcript_window)
 
     def _generate_fallback(self, transcript_window: str, api_error: Optional[str] = None) -> Dict[str, Any]:
         """Provides instant high-quality structured output when keys are being configured."""

@@ -42,7 +42,17 @@ CREATE TABLE IF NOT EXISTS daily_usage (
     CONSTRAINT unique_user_product_day UNIQUE(user_id, product_id, usage_date)
 );
 
+-- 4. Processed Webhooks Idempotency Ledger
+CREATE TABLE IF NOT EXISTS processed_webhooks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    event_id VARCHAR(255) UNIQUE NOT NULL,
+    gateway VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Indexing for sub-50ms token lookup & quota enforcement
 CREATE INDEX IF NOT EXISTS idx_subscriptions_lookup ON subscriptions(user_id, product_id, status);
 CREATE INDEX IF NOT EXISTS idx_usage_lookup ON daily_usage(user_id, product_id, usage_date);
+CREATE INDEX IF NOT EXISTS idx_processed_webhooks_event ON processed_webhooks(event_id);
+
 

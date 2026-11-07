@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     # Security & JWT
     JWT_SECRET_KEY: str = "supersecret_aqvonx_jwt_signing_key_change_in_production_123456789"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours (short-lived access tokens)
+    ADMIN_EMAILS: List[str] = ["developer@aqvonx.com"]
 
     # Payment Gateways (Razorpay & LemonSqueezy)
     RAZORPAY_KEY_ID: str = "rzp_test_xxxx"
@@ -30,13 +31,14 @@ class Settings(BaseSettings):
     LEMONSQUEEZY_API_KEY: str = "lmsq_xxxx"
     LEMONSQUEEZY_WEBHOOK_SECRET: str = "lmsq_whsec_xxxx"
 
-    # CORS Whitelist
+    # CORS Whitelist (Explicit origins only - never wildcard with credentials)
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://aqvonx.com",
         "https://www.aqvonx.com",
     ]
+    ALLOWED_EXTENSION_IDS: List[str] = []
 
     # Quota Limits
     FREE_TIER_DAILY_LIMIT: int = 5

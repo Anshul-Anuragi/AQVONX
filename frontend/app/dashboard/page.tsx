@@ -58,8 +58,10 @@ export default function UserDashboardPage() {
   const handleGenerate = async () => {
     setIsRefreshing(true);
     try {
-      const email = session?.user?.email || 'developer@aqvonx.com';
-      const res = await fetch('http://localhost:8000/api/v1/auth/extension-token', {
+      const email = session?.user?.email;
+      if (!email) return;
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/v1/auth/extension-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -69,20 +71,21 @@ export default function UserDashboardPage() {
         setGeneratedToken(data.access_token);
       }
     } catch {
-      // Keep sandbox token
+      // Keep existing token
     } finally {
       setIsRefreshing(false);
     }
   };
 
   const handleConnectExtension = () => {
+    // Send token bound strictly to the current origin
     window.postMessage(
       {
         type: 'AQVONX_SET_TOKEN',
         token: generatedToken,
         plan: 'pro_quarterly',
       },
-      '*'
+      window.location.origin
     );
     setConnectSuccess(true);
     setTimeout(() => setConnectSuccess(false), 3000);

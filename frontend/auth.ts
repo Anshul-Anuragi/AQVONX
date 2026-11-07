@@ -2,11 +2,10 @@ import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 
-// List of super-admin emails that have access to /admin
-const ADMIN_EMAILS = [
-  "developer@aqvonx.com",
-  // Add your primary Google account email here
-];
+// Verified super-admin emails that have access to /admin
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "developer@aqvonx.com")
+  .split(",")
+  .map((e) => e.trim().toLowerCase());
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -26,7 +25,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const email = rawEmail.trim().toLowerCase();
-        const isAdmin = ADMIN_EMAILS.includes(email);
+
+        // AUTH-1 / AUTH-3: Super-admin accounts are blocked from unverified credentials fallback.
+        // Super-admin access requires Google OAuth with mandatory 2FA.
+        if (ADMIN_EMAILS.includes(email)) {
+          return null;
+        }
+
         const namePart = email.split("@")[0];
         const formattedName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
 
@@ -34,24 +39,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: `usr_${Buffer.from(email).toString("hex").slice(0, 16)}`,
           email: email,
           name: formattedName,
-          role: isAdmin ? "admin" : "user",
+          role: "user",
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
-        // @ts-expect-error custom role from user object
-        token.role = user.role || (ADMIN_EMAILS.includes(user.email || "") ? "admin" : "user");
+        // Admin role is strictly restricted to verified Google OAuth accounts in ADMIN_EMAILS
+        const isGoogleAuth = account?.provider === "google";
+        const email = (user.email || token.email || "").toLowerCase();
+        const isAdmin = isGoogleAuth && ADMIN_EMAILS.includes(email);
+
+        token.role = isAdmin ? "admin" : "user";
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub as string;
-        // @ts-expect-error adding custom role attribute
-        session.user.role = token.role || "user";
+        session.user.role = (token.role as string) || "user";
       }
       return session;
     },

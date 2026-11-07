@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.db.models import User, Subscription, DailyUsage
 from app.core.config import settings
 from app.core.security import decode_token
+from app.core.rate_limit import rate_limit_handshake
 
 router = APIRouter()
 
@@ -28,7 +29,7 @@ class LicenseVerifyResponse(BaseModel):
     email: Optional[str] = None
 
 
-@router.post("/verify", response_model=LicenseVerifyResponse)
+@router.post("/verify", response_model=LicenseVerifyResponse, dependencies=[Depends(rate_limit_handshake)])
 async def verify_license(payload: LicenseVerifyRequest, db: AsyncSession = Depends(get_db)):
     """
     Verifies subscription status and daily usage quota for an extension client.

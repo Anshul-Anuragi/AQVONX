@@ -56,7 +56,6 @@ export default function Navbar() {
   const [docsOpen, setDocsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  // @ts-expect-error custom role attribute in session
   const isAdmin = session?.user?.role === 'admin';
 
   return (

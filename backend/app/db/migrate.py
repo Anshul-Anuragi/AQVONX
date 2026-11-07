@@ -120,7 +120,16 @@ SCHEMA_STATEMENTS = [
         ends_at TIMESTAMPTZ
     );
     """,
-    # 6. Performance Indexing
+    # 6. Webhook Idempotency Ledger
+    """
+    CREATE TABLE IF NOT EXISTS processed_webhooks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_id VARCHAR(255) UNIQUE NOT NULL,
+        gateway VARCHAR(50) NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    );
+    """,
+    # 7. Performance Indexing
     """
     CREATE INDEX IF NOT EXISTS idx_auth_users_email ON auth_users(email);
     """,
@@ -129,6 +138,9 @@ SCHEMA_STATEMENTS = [
     """,
     """
     CREATE INDEX IF NOT EXISTS idx_notesgpt_subscriptions_user ON notesgpt_subscriptions(user_id, status);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_processed_webhooks_event ON processed_webhooks(event_id);
     """,
 ]
 

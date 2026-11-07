@@ -9,17 +9,18 @@ from app.db.session import get_db
 from app.db.models import AuthUser, NotesGPTUser, NotesGPTUsage, User, Subscription, DailyUsage
 from app.core.config import settings
 from app.core.security import get_current_user_token
+from app.core.rate_limit import rate_limit_notes
 from app.services.gemini import gemini_service
 
 router = APIRouter()
 
 
 class NotesGenerateRequest(BaseModel):
-    transcript_window: str = Field(..., description="Transcript snippet or audio text window to summarize")
-    frame_base64: Optional[str] = Field(None, description="Optional raw base64 frame capture from video/tab")
-    lang: str = Field("en", description="Target output language code (e.g. en, hi, es, fr)")
+    transcript_window: str = Field(..., max_length=150000, description="Transcript snippet or audio text window to summarize")
+    frame_base64: Optional[str] = Field(None, max_length=8000000, description="Optional raw base64 frame capture from video/tab")
+    lang: str = Field("en", max_length=10, description="Target output language code (e.g. en, hi, es, fr)")
     include_mindmap: bool = Field(True, description="Whether to generate an SVG visual flowchart")
-    chunk_seconds: Optional[int] = Field(45, description="Duration of the audio/video chunk in seconds")
+    chunk_seconds: Optional[int] = Field(45, ge=5, le=300, description="Duration of the audio/video chunk in seconds")
 
 
 class NotesGenerateResponse(BaseModel):
@@ -30,7 +31,7 @@ class NotesGenerateResponse(BaseModel):
     plan_tier: str = "trial"
 
 
-@router.post("/generate", response_model=NotesGenerateResponse)
+@router.post("/generate", response_model=NotesGenerateResponse, dependencies=[Depends(rate_limit_notes)])
 async def generate_notes(
     payload: NotesGenerateRequest,
     token_data: dict = Depends(get_current_user_token),

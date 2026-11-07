@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.router import api_router
@@ -33,23 +34,35 @@ app = FastAPI(
     title="AQVONX Intelligence Hub API",
     description="Centralized multi-product licensing, quota management, and Gemini Flash proxy for Chrome extensions (NotesGPT, PortalSnap, EditorialLens).",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
     lifespan=lifespan,
 )
 
-# Sanitize exact origins for CORS (filter out wildcards which are handled by allow_origin_regex)
-exact_origins = [o for o in settings.ALLOWED_ORIGINS if "*" not in o]
+# CORS configuration supporting verified web clients & chrome extensions
+cors_origins = [o for o in settings.ALLOWED_ORIGINS if "*" not in o]
+if settings.ALLOWED_EXTENSION_IDS:
+    for ext_id in settings.ALLOWED_EXTENSION_IDS:
+        cors_origins.append(f"chrome-extension://{ext_id}")
 
-# CORS configuration supporting web clients & chrome extensions
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=exact_origins,
-    allow_origin_regex=r"(https?://.*|chrome-extension://.*)",
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^chrome-extension://[a-p]{32}$",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Extension-ID", "Accept"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled server exception on {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred."}
+    )
+
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
