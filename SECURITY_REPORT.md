@@ -167,3 +167,4 @@
    - Generate high-entropy 64-character secret (`openssl rand -hex 32`) for `NEXTAUTH_SECRET` and `JWT_SECRET_KEY`.
 5. [ ] **Cloudflare WAF**:
    - Enable Cloudflare Bot Fight Mode and rate limiting in front of `api.aqvonx.com`.
+

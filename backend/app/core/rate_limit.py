@@ -48,3 +48,4 @@ async def rate_limit_handshake(request: Request):
 async def rate_limit_notes(request: Request):
     client_ip = request.client.host if request.client else "unknown_client"
     notes_limiter.check(client_ip)
+

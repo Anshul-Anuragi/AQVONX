@@ -1,24 +1,9 @@
 import type { Metadata } from 'next';
-import { Inter, Instrument_Serif } from 'next/font/google';
 import './globals.css';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/footer';
 import ThemeProvider from '@/components/ThemeProvider';
 import SessionProvider from '@/components/SessionProvider';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-  display: 'swap',
-});
-
-const instrumentSerif = Instrument_Serif({
-  subsets: ['latin'],
-  weight: ['400'],
-  style: ['normal', 'italic'],
-  variable: '--font-serif-heading',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: 'AQVONX Studio — Next-Gen AI Browser Extensions',
@@ -37,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${instrumentSerif.variable} font-sans antialiased min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-300 relative selection:bg-[#7305FA]/30 selection:text-[#c29dfc]`}
+        className="font-sans antialiased min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-300 relative selection:bg-[#7305FA]/30 selection:text-[#c29dfc]"
       >
         <SessionProvider>
           <ThemeProvider>
