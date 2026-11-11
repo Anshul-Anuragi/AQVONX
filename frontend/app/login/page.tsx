@@ -3,23 +3,63 @@
 import React, { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Shield, Mail, ArrowRight, RefreshCw, AlertCircle } from 'lucide-react';
+import { 
+  Shield, 
+  Mail, 
+  Lock, 
+  User as UserIcon, 
+  ArrowRight, 
+  RefreshCw, 
+  AlertCircle,
+  Eye,
+  EyeOff,
+  CheckCircle2
+} from 'lucide-react';
 import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
+
+  // Sign In Form States
+  const [signInEmail, setSignInEmail] = useState('');
+  const [signInPassword, setSignInPassword] = useState('');
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
+
+  // Sign Up Form States
+  const [signUpName, setSignUpName] = useState('');
+  const [signUpEmail, setSignUpEmail] = useState('');
+  const [signUpPassword, setSignUpPassword] = useState('');
+  const [signUpConfirmPassword, setSignUpConfirmPassword] = useState('');
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+
+  // Status & Feedback
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
+  // 1. Google OAuth
+  const handleGoogleSignIn = () => {
+    setIsGoogleLoading(true);
+    setErrorMsg('');
+    signIn('google', { callbackUrl: '/dashboard' });
+  };
+
+  // 2. Email & Password Sign In
+  const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
 
-    const cleanEmail = email.trim();
-    if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+    const cleanEmail = signInEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
       setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+
+    if (!signInPassword) {
+      setErrorMsg('Please enter your password.');
       return;
     }
 
@@ -27,49 +67,113 @@ export default function LoginPage() {
     try {
       const res = await signIn('credentials', {
         email: cleanEmail,
+        password: signInPassword,
         redirect: false,
         callbackUrl: '/dashboard',
       });
 
       if (res?.error) {
-        setErrorMsg('Authentication failed. Please verify your email.');
+        setErrorMsg('Invalid email or password. Please verify your credentials.');
       } else {
         router.push(res?.url || '/dashboard');
         router.refresh();
       }
     } catch {
-      setErrorMsg('An unexpected error occurred. Please try again.');
+      setErrorMsg('An unexpected error occurred during sign in.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleSignIn = () => {
-    setIsGoogleLoading(true);
-    signIn('google', { callbackUrl: '/dashboard' });
+  // 3. Direct Email/Password Registration (No OTP Required)
+  const handleSignUpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const cleanEmail = signUpEmail.trim().toLowerCase();
+    const cleanName = signUpName.trim();
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+
+    if (signUpPassword.length < 6) {
+      setErrorMsg('Password must be at least 6 characters.');
+      return;
+    }
+
+    if (signUpPassword !== signUpConfirmPassword) {
+      setErrorMsg('Passwords do not match.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const registerRes = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: cleanName,
+          email: cleanEmail,
+          password: signUpPassword,
+          confirmPassword: signUpConfirmPassword,
+        }),
+      });
+
+      const registerData = await registerRes.json();
+
+      if (!registerRes.ok) {
+        setErrorMsg(registerData.error || 'Failed to create account.');
+        setIsLoading(false);
+        return;
+      }
+
+      setSuccessMsg('Account created successfully! Signing you in...');
+
+      // Auto login immediately
+      const loginRes = await signIn('credentials', {
+        email: cleanEmail,
+        password: signUpPassword,
+        redirect: false,
+        callbackUrl: '/dashboard',
+      });
+
+      if (loginRes?.error) {
+        setErrorMsg('Account created, but sign-in encountered an issue. Please sign in manually.');
+      } else {
+        router.push(loginRes?.url || '/dashboard');
+        router.refresh();
+      }
+    } catch {
+      setErrorMsg('Network error. Failed to complete registration.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
       <div className="glass-card max-w-md w-full p-8 space-y-6 text-center border-purple-500/30 relative overflow-hidden shadow-2xl">
-        <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-40 bg-purple-600/20 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 h-48 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Brand Icon */}
+        {/* Brand Header */}
         <div className="w-12 h-12 rounded-2xl purple-glass-pill mx-auto flex items-center justify-center font-bold text-lg text-purple-300">
           A
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <h1 className="font-editorial text-4xl text-[var(--text-main)] tracking-tight font-normal">
             Welcome to AQVONX
           </h1>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            One account connects your licenses across NotesGPT, PortalSnap, and EditorialLens.
+            Universal workspace for NotesGPT, PortalSnap, EditorialLens &amp; upcoming tools.
           </p>
         </div>
 
-        {/* Google One-Click Sign In Button */}
-        <div className="pt-2">
+        {/* Google 1-Click Sign In (Top for both tabs) */}
+        <div>
           <button
             onClick={handleGoogleSignIn}
             disabled={isGoogleLoading || isLoading}
@@ -101,7 +205,7 @@ export default function LoginPage() {
           </button>
         </div>
 
-        {/* Modern OR Divider */}
+        {/* Divider */}
         <div className="relative my-4 flex items-center justify-center">
           <div className="w-full border-t border-[var(--card-border)]" />
           <span className="absolute px-3 text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] bg-[var(--card-bg)]">
@@ -109,49 +213,220 @@ export default function LoginPage() {
           </span>
         </div>
 
-        {/* Email Form */}
-        <form onSubmit={handleEmailSubmit} className="space-y-3 text-left">
-          <div className="space-y-1">
-            <label className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
-              Email Address
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="developer@aqvonx.com"
-                disabled={isLoading || isGoogleLoading}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 transition-colors"
-                required
-              />
-            </div>
-          </div>
-
-          {errorMsg && (
-            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
+        {/* Tabs Switcher */}
+        <div className="grid grid-cols-2 p-1 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs font-semibold">
           <button
-            type="submit"
-            disabled={isLoading || isGoogleLoading}
-            className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer disabled:opacity-70"
+            type="button"
+            onClick={() => {
+              setActiveTab('signin');
+              setErrorMsg('');
+              setSuccessMsg('');
+            }}
+            className={`py-2 rounded-lg transition-all ${
+              activeTab === 'signin'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
           >
-            {isLoading ? (
-              <RefreshCw className="w-4 h-4 animate-spin text-white" />
-            ) : (
-              <>
-                <span>Sign In with Email</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </>
-            )}
+            Sign In
           </button>
-        </form>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('signup');
+              setErrorMsg('');
+              setSuccessMsg('');
+            }}
+            className={`py-2 rounded-lg transition-all ${
+              activeTab === 'signup'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            Create Account
+          </button>
+        </div>
 
+        {/* Feedback Messages */}
+        {errorMsg && (
+          <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2 text-left animate-in fade-in duration-200">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2 text-left animate-in fade-in duration-200">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* TAB 1: SIGN IN */}
+        {activeTab === 'signin' && (
+          <form onSubmit={handleSignInSubmit} className="space-y-3.5 text-left animate-in fade-in duration-150">
+            <div className="space-y-1">
+              <label className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  value={signInEmail}
+                  onChange={(e) => setSignInEmail(e.target.value)}
+                  placeholder="developer@aqvonx.com"
+                  disabled={isLoading || isGoogleLoading}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 transition-colors"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between items-center">
+                <label className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
+                  Password
+                </label>
+              </div>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type={showSignInPassword ? 'text' : 'password'}
+                  value={signInPassword}
+                  onChange={(e) => setSignInPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  disabled={isLoading || isGoogleLoading}
+                  className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 transition-colors"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSignInPassword(!showSignInPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-main)]"
+                >
+                  {showSignInPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading || isGoogleLoading}
+              className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer disabled:opacity-70 mt-2"
+            >
+              {isLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </>
+              )}
+            </button>
+          </form>
+        )}
+
+        {/* TAB 2: CREATE ACCOUNT (Sign Up) */}
+        {activeTab === 'signup' && (
+          <form onSubmit={handleSignUpSubmit} className="space-y-3 text-left animate-in fade-in duration-150">
+            <div className="space-y-1">
+              <label className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
+                Full Name
+              </label>
+              <div className="relative">
+                <UserIcon className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={signUpName}
+                  onChange={(e) => setSignUpName(e.target.value)}
+                  placeholder="John Doe"
+                  disabled={isLoading || isGoogleLoading}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 transition-colors"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  value={signUpEmail}
+                  onChange={(e) => setSignUpEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  disabled={isLoading || isGoogleLoading}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 transition-colors"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type={showSignUpPassword ? 'text' : 'password'}
+                  value={signUpPassword}
+                  onChange={(e) => setSignUpPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  disabled={isLoading || isGoogleLoading}
+                  className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 transition-colors"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-main)]"
+                >
+                  {showSignUpPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type={showSignUpPassword ? 'text' : 'password'}
+                  value={signUpConfirmPassword}
+                  onChange={(e) => setSignUpConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  disabled={isLoading || isGoogleLoading}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 transition-colors"
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading || isGoogleLoading}
+              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 cursor-pointer disabled:opacity-70 mt-2"
+            >
+              {isLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+              ) : (
+                <>
+                  <span>Create Free Account</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </>
+              )}
+            </button>
+          </form>
+        )}
+
+        {/* Security Footer */}
         <div className="pt-4 border-t border-[var(--card-border)] text-[11px] text-[var(--text-muted)] space-y-2">
           <div className="flex items-center justify-center gap-1.5 text-[var(--text-muted)]">
             <Shield className="w-3.5 h-3.5 text-emerald-400" />

@@ -88,6 +88,7 @@ class AuthUser(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=True)
     full_name = Column(String(150), nullable=True)
     role = Column(String(20), default="user", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)

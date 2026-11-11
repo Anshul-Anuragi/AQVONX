@@ -79,12 +79,14 @@ SCHEMA_STATEMENTS = [
     CREATE TABLE IF NOT EXISTS auth_users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255),
         full_name VARCHAR(150),
         role VARCHAR(20) DEFAULT 'user' NOT NULL,
         is_active BOOLEAN DEFAULT TRUE NOT NULL,
         is_banned BOOLEAN DEFAULT FALSE NOT NULL,
         created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
     );
+    ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
     """,
     # 3. NotesGPT Extension Users Table
     """
