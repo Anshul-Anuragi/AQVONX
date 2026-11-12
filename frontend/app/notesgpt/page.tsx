@@ -188,8 +188,8 @@ export default function NotesGPTPage() {
               <p className="text-xs text-[var(--text-muted)] mt-1">Perfect for casual learners and weekly webinars.</p>
 
               <div className="mt-6 flex items-baseline">
-                <span className="text-4xl font-extrabold text-[var(--text-main)]">₹0</span>
-                <span className="text-[var(--text-muted)] text-sm ml-2">/ forever</span>
+                <span className="text-4xl font-extrabold text-[var(--text-main)]">$0</span>
+                <span className="text-[var(--text-muted)] text-sm ml-2">/ 3-day trial</span>
               </div>
 
               <ul className="mt-8 space-y-3 text-sm text-[var(--text-muted)]">
@@ -241,12 +241,12 @@ export default function NotesGPTPage() {
 
               <div className="mt-6 flex items-baseline">
                 <span className="text-4xl font-extrabold text-[var(--text-main)]">
-                  {billingCycle === "monthly" ? "₹149" : "₹119"}
+                  {billingCycle === "monthly" ? "$6.99" : "$4.99"}
                 </span>
                 <span className="text-[var(--text-muted)] text-sm ml-2">/ month</span>
               </div>
-              <div className="text-xs text-[var(--text-muted)] mt-1">
-                {billingCycle === "annual" ? "Billed annually (₹1,428/yr)" : "Cancel anytime in dashboard"}
+              <div className="text-xs text-[var(--text-muted)] mt-1 font-mono">
+                {billingCycle === "annual" ? "Billed quarterly ($14.99 / 3mo)" : "Billed monthly ($6.99/mo)"}
               </div>
 
               <ul className="mt-8 space-y-3 text-sm text-[var(--text-muted)]">
@@ -278,7 +278,7 @@ export default function NotesGPTPage() {
                 href="/pricing/notesgpt"
                 className="w-full block text-center py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-sm shadow-lg shadow-purple-500/25 transition-all hover:scale-[1.02]"
               >
-                Upgrade to Pro (₹149/mo)
+                Upgrade to Pro ($6.99 / $14.99)
               </Link>
             </div>
           </div>

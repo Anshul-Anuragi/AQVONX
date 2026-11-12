@@ -60,7 +60,7 @@ export default function HomePage() {
             >
               Live Demo &amp; Chrome Install →
             </Link>
-            <span className="text-[11px] font-mono text-[var(--text-muted)]">₹149/mo</span>
+            <span className="text-[11px] font-mono text-[var(--text-muted)]">$6.99/mo</span>
           </div>
         </div>
 
@@ -82,7 +82,7 @@ export default function HomePage() {
             >
               Eligibility Engine →
             </Link>
-            <span className="text-[11px] font-mono text-[var(--text-muted)]">₹99/mo</span>
+            <span className="text-[11px] font-mono text-[var(--text-muted)]">$4.99/mo</span>
           </div>
         </div>
 
