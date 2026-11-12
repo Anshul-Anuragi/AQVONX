@@ -16,6 +16,7 @@ router = APIRouter()
 
 
 class NotesGenerateRequest(BaseModel):
+    parts: Optional[List[dict]] = Field(None, description="Direct Gemini API contents parts array from Chrome extension")
     transcript_window: Optional[str] = Field(None, max_length=150000, description="Transcript snippet or audio text window to summarize")
     transcript: Optional[str] = Field(None, max_length=150000, description="Full or snippet transcript")
     video_url: Optional[str] = Field(None, max_length=2000, description="Source video URL")
@@ -180,6 +181,7 @@ async def generate_notes(
         frame_base64=payload.frame_base64,
         lang=target_lang,
         include_mindmap=should_include_mindmap,
+        parts=payload.parts,
     )
 
     notes_text = result.get("markdown", "")

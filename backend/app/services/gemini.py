@@ -1,7 +1,19 @@
 import json
 import logging
+import re
 from typing import Optional, Dict, Any, List
 import httpx
+try:
+    from fastapi import HTTPException, status
+except ImportError:
+    class HTTPException(Exception):  # type: ignore
+        def __init__(self, status_code: int = 500, detail: str = ""):
+            super().__init__(detail)
+            self.status_code = status_code
+            self.detail = detail
+    class status:  # type: ignore
+        HTTP_500_INTERNAL_SERVER_ERROR = 500
+        HTTP_502_BAD_GATEWAY = 502
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -10,29 +22,118 @@ logger = logging.getLogger(__name__)
 class GeminiService:
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
-        # Official Google Gemini 2.0 Flash model endpoint
-        self.primary_model = "gemini-2.0-flash"
-        self.fallback_model = "gemini-1.5-flash"
+        # Candidate model hierarchy: start with gemini-2.5-flash and automatically cascade down
+        self.candidate_models = [
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-flash-lite-latest",
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-1.5-flash",
+            "gemini-2.0-flash",
+        ]
 
     def _get_url(self, model: str) -> str:
         return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
+    def clean_markdown_output(self, text: str) -> str:
+        """Strips system instruction echo and preamble from the generated notes."""
+        if not text:
+            return ""
+        cleaned = text.strip()
+        unwanted_prefixes = [
+            "You are NotesGPT, an expert university-level Computer Science AI note architect.",
+            "You are NotesGPT, an expert university-level Computer Science AI note architect",
+            "You are NotesGPT",
+            "You are AQVONX Notes Engine, an advanced AI technical knowledge distiller.",
+            "You are AQVONX Notes Engine",
+        ]
+        for prefix in unwanted_prefixes:
+            if cleaned.startswith(prefix):
+                cleaned = cleaned[len(prefix):].lstrip("\n:.- ")
+        return cleaned.strip()
+
     async def generate_notes(
         self,
-        transcript_window: str,
+        transcript_window: str = "",
         frame_base64: Optional[str] = None,
         lang: str = "en",
-        include_mindmap: bool = True
+        include_mindmap: bool = True,
+        parts: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Generate structured Markdown summary, key takeaways, and an SVG flowchart
-        using Gemini Flash API without exposing the server key to the client.
+        using Google Gemini REST API without exposing server credentials to client extensions.
         """
-        # AI-1: Prompt Injection Defense - sanitize delimiter break-outs
-        sanitized_transcript = transcript_window.replace("</TRANSCRIPT_WINDOW>", "[ESCAPED_TAG]")
+        # 1. Require real Gemini API key
+        if not settings.is_gemini_configured or not self.api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="GEMINI_API_KEY is not configured on the backend server. Please configure a valid Gemini API key in environment variables.",
+            )
 
-        prompt = f"""
-You are AQVONX Notes Engine, an advanced AI technical knowledge distiller.
+        # 2. Build or forward request payload
+        is_custom_parts = bool(parts and len(parts) > 0)
+
+        if is_custom_parts:
+            # Normalize extension-provided parts
+            normalized_parts: List[Dict[str, Any]] = []
+            has_image = False
+
+            for p in parts:
+                if not isinstance(p, dict):
+                    continue
+                # Handle text
+                if "text" in p:
+                    normalized_parts.append({"text": str(p["text"])})
+                # Handle inlineData (camelCase)
+                elif "inlineData" in p and isinstance(p["inlineData"], dict):
+                    has_image = True
+                    normalized_parts.append({
+                        "inlineData": {
+                            "mimeType": p["inlineData"].get("mimeType", "image/jpeg"),
+                            "data": p["inlineData"].get("data", ""),
+                        }
+                    })
+                # Handle inline_data (snake_case)
+                elif "inline_data" in p and isinstance(p["inline_data"], dict):
+                    has_image = True
+                    normalized_parts.append({
+                        "inlineData": {
+                            "mimeType": p["inline_data"].get("mime_type", "image/jpeg"),
+                            "data": p["inline_data"].get("data", ""),
+                        }
+                    })
+
+            # Append frame_base64 if not already present in parts
+            if frame_base64 and not has_image:
+                clean_b64 = frame_base64
+                mime_type = "image/jpeg"
+                if "data:" in clean_b64 and ";base64," in clean_b64:
+                    header, clean_b64 = clean_b64.split(";base64,", 1)
+                    mime_type = header.replace("data:", "")
+                normalized_parts.append({
+                    "inlineData": {
+                        "mimeType": mime_type,
+                        "data": clean_b64,
+                    }
+                })
+
+            request_body: Dict[str, Any] = {
+                "contents": [
+                    {
+                        "parts": normalized_parts
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.2,
+                }
+            }
+        else:
+            # Standard transcript synthesis prompt
+            sanitized_transcript = transcript_window.replace("</TRANSCRIPT_WINDOW>", "[ESCAPED_TAG]") if transcript_window else ""
+
+            prompt = f"""You are AQVONX Notes Engine, an advanced AI technical knowledge distiller.
 Analyze the following media transcript and optional visual snapshot frame.
 Target Language: {lang}
 
@@ -56,126 +157,132 @@ You MUST return a valid JSON object matching this schema:
   "svg_flowchart": "<svg ...>...</svg>" or null
 }}
 """
+            built_parts: List[Dict[str, Any]] = [{"text": prompt}]
 
-        parts: List[Dict[str, Any]] = [{"text": prompt}]
+            if frame_base64:
+                clean_b64 = frame_base64
+                mime_type = "image/jpeg"
+                if "data:" in clean_b64 and ";base64," in clean_b64:
+                    header, clean_b64 = clean_b64.split(";base64,", 1)
+                    mime_type = header.replace("data:", "")
+                built_parts.append({
+                    "inlineData": {
+                        "mimeType": mime_type,
+                        "data": clean_b64
+                    }
+                })
 
-        if frame_base64:
-            clean_b64 = frame_base64
-            mime_type = "image/jpeg"
-            if "data:" in clean_b64 and ";base64," in clean_b64:
-                header, clean_b64 = clean_b64.split(";base64,", 1)
-                mime_type = header.replace("data:", "")
-            
-            parts.append({
-                "inline_data": {
-                    "mime_type": mime_type,
-                    "data": clean_b64
+            request_body = {
+                "contents": [
+                    {
+                        "parts": built_parts
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "response_mime_type": "application/json"
                 }
-            })
-
-        request_body = {
-            "contents": [
-                {
-                    "parts": parts
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.2,
-                "response_mime_type": "application/json"
             }
-        }
 
-        # If API key is not yet configured, return instant sandbox simulated response
-        if not settings.is_gemini_configured:
-            return self._generate_fallback(transcript_window)
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # 1. Attempt primary model (gemini-2.0-flash)
-                response = await client.post(
-                    self._get_url(self.primary_model),
-                    params={"key": self.api_key},
-                    json=request_body,
-                    headers={"Content-Type": "application/json"}
-                )
-
-                # Fallback to gemini-1.5-flash if 404 or model unavailable
-                if response.status_code == 404:
+        # 3. Model Fallback Chain via httpx.AsyncClient
+        last_error = ""
+        async with httpx.AsyncClient(timeout=40.0) as client:
+            for model in self.candidate_models:
+                url = self._get_url(model)
+                try:
                     response = await client.post(
-                        self._get_url(self.fallback_model),
+                        url,
                         params={"key": self.api_key},
                         json=request_body,
                         headers={"Content-Type": "application/json"}
                     )
 
-                if response.status_code != 200:
-                    logger.error(f"Gemini API error status code {response.status_code}")
-                    return self._generate_fallback(transcript_window)
+                    if response.status_code == 200:
+                        result_json = response.json()
+                        candidates = result_json.get("candidates", [])
+                        if not candidates or "content" not in candidates[0]:
+                            last_error = f"Model {model} returned empty candidates"
+                            continue
 
-                result_json = response.json()
-                candidate_text = result_json["candidates"][0]["content"]["parts"][0]["text"]
-                parsed = json.loads(candidate_text)
-                return parsed
+                        raw_text = candidates[0]["content"]["parts"][0].get("text", "")
 
-        except Exception as e:
-            logger.error(f"Gemini inference dispatch error: {type(e).__name__}")
-            return self._generate_fallback(transcript_window)
+                        # Parse output (JSON or raw Markdown)
+                        markdown_out = ""
+                        takeaways: List[str] = []
+                        svg_out: Optional[str] = None
 
-    def _generate_fallback(self, transcript_window: str, api_error: Optional[str] = None) -> Dict[str, Any]:
-        """Provides instant high-quality structured output when keys are being configured."""
-        first_line = transcript_window.strip().split("\n")[0][:80] if transcript_window else "Core Concept Overview"
-        fallback_svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 180" fill="none">
-  <defs>
-    <linearGradient id="n-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#7305FA" />
-      <stop offset="100%" stop-color="#00F0FF" />
-    </linearGradient>
-  </defs>
-  <rect width="800" height="180" rx="16" fill="#0B0F19" stroke="#1E293B" stroke-width="1.5" />
-  <!-- Node 1 -->
-  <rect x="30" y="55" width="200" height="70" rx="12" fill="#131B2E" stroke="#7305FA" stroke-width="1.5" />
-  <text x="130" y="85" fill="#E2E8F0" font-family="sans-serif" font-size="14" font-weight="600" text-anchor="middle">Input Stream</text>
-  <text x="130" y="105" fill="#94A3B8" font-family="sans-serif" font-size="11" text-anchor="middle">Frames &amp; Captions</text>
-  <!-- Connector 1 -->
-  <path d="M 230 90 L 290 90" stroke="url(#n-grad)" stroke-width="2.5" />
-  <!-- Node 2 -->
-  <rect x="290" y="45" width="220" height="90" rx="14" fill="#18223D" stroke="#7305FA" stroke-width="2" />
-  <text x="400" y="82" fill="#c29dfc" font-family="sans-serif" font-size="15" font-weight="bold" text-anchor="middle">AQVONX Nexus Engine</text>
-  <text x="400" y="105" fill="#CBD5E1" font-family="sans-serif" font-size="12" text-anchor="middle">Gemini Flash Multimodal</text>
-  <!-- Connector 2 -->
-  <path d="M 510 90 L 570 90" stroke="url(#n-grad)" stroke-width="2.5" />
-  <!-- Node 3 -->
-  <rect x="570" y="55" width="200" height="70" rx="12" fill="#131B2E" stroke="#34D399" stroke-width="1.5" />
-  <text x="670" y="85" fill="#E2E8F0" font-family="sans-serif" font-size="14" font-weight="600" text-anchor="middle">Knowledge Distillate</text>
-  <text x="670" y="105" fill="#94A3B8" font-family="sans-serif" font-size="11" text-anchor="middle">Markdown + Mind Map</text>
-</svg>"""
+                        clean_text = raw_text.strip()
+                        if clean_text.startswith("```json"):
+                            clean_text = clean_text[7:]
+                        elif clean_text.startswith("```"):
+                            clean_text = clean_text[3:]
+                        if clean_text.endswith("```"):
+                            clean_text = clean_text[:-3]
+                        clean_text = clean_text.strip()
 
-        notice = f"\n\n> [!NOTE]\n> *Processed in AQVONX sandbox mode. Add your `GEMINI_API_KEY` in `backend/.env` for live model inference.*" if not settings.is_gemini_configured else ""
+                        try:
+                            parsed = json.loads(clean_text)
+                            if isinstance(parsed, dict) and "markdown" in parsed:
+                                markdown_out = parsed.get("markdown", "")
+                                takeaways = parsed.get("key_takeaways", [])
+                                svg_out = parsed.get("svg_flowchart")
+                            elif isinstance(parsed, dict) and "text" in parsed:
+                                markdown_out = parsed.get("text", "")
+                            elif isinstance(parsed, dict) and "summary" in parsed:
+                                markdown_out = parsed.get("summary", "")
+                                takeaways = parsed.get("key_takeaways", [])
+                            else:
+                                markdown_out = raw_text
+                        except Exception:
+                            markdown_out = raw_text
 
-        markdown = f"""# {first_line}
+                        # Clean any echoed system instructions
+                        markdown_out = self.clean_markdown_output(markdown_out)
 
-### Executive Synthesis
-This technical session details modern architectural execution, streaming ingest pipelines, and client-side quota controls.{notice}
+                        # Extract SVG if embedded in markdown
+                        if not svg_out and "<svg" in markdown_out and "</svg>" in markdown_out:
+                            s_idx = markdown_out.find("<svg")
+                            e_idx = markdown_out.find("</svg>") + len("</svg>")
+                            svg_out = markdown_out[s_idx:e_idx]
 
-### Key Structural Highlights
-- **Distributed Ingestion**: Frames and audio transcription windows are continuously sampled and normalized.
-- **Server-Side Quota Enforcement**: Token-gated licensing prevents client tampering while maintaining sub-second inference roundtrips.
-- **Visual Synthesis**: Real-time generation of SVG semantic graphs accompanying raw lecture or meeting notes.
+                        # Extract takeaways if empty
+                        if not takeaways and markdown_out:
+                            lines = [
+                                l.strip("-* ").strip()
+                                for l in markdown_out.split("\n")
+                                if l.strip().startswith(("-", "*")) and len(l.strip()) > 8
+                            ]
+                            takeaways = lines[:4]
 
-### Technical Recommendations
-1. Validate client JWT signatures before dispatching to high-concurrency LLM endpoints.
-2. Maintain atomic daily usage counters with Neon Postgres indexed tuples.
-"""
+                        return {
+                            "markdown": markdown_out,
+                            "key_takeaways": takeaways,
+                            "svg_flowchart": svg_out,
+                            "model_used": model
+                        }
 
-        return {
-            "markdown": markdown,
-            "key_takeaways": [
-                "Real-time video/transcript window distilled with zero client credential exposure",
-                "Sub-50ms quota verification using Neon PostgreSQL unique daily constraints",
-                "Export-ready Markdown paired with dynamic vector SVG mind map"
-            ],
-            "svg_flowchart": fallback_svg
-        }
+                    elif response.status_code in [404, 429, 500, 503]:
+                        logger.warning(f"Gemini model {model} HTTP {response.status_code}: {response.text[:120]}")
+                        last_error = f"Model {model} HTTP {response.status_code}: {response.text[:120]}"
+                        continue
+                    else:
+                        logger.error(f"Gemini API returned unhandled error {response.status_code}: {response.text}")
+                        raise HTTPException(
+                            status_code=status.HTTP_502_BAD_GATEWAY,
+                            detail=f"Google Gemini API error ({response.status_code}): {response.text[:300]}"
+                        )
+
+                except httpx.RequestError as e:
+                    logger.warning(f"Request error for model {model}: {e}")
+                    last_error = str(e)
+                    continue
+
+        # If all candidate models fail
+        logger.error(f"All Gemini models exhausted. Last error: {last_error}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Google Gemini upstream models failed: {last_error or 'All model requests failed or timed out.'}"
+        )
 
 
 gemini_service = GeminiService()
