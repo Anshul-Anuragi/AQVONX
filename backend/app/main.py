@@ -98,5 +98,5 @@ async def health_check():
         "status": "healthy",
         "service": "aqvonx-backend",
         "database": "configured" if settings.is_database_configured else "pending_credentials",
-        "gemini": "live" if settings.is_gemini_configured else "sandbox_mock"
+        "gemini": "live" if settings.is_gemini_configured else "offline_standby"
     }

@@ -11,25 +11,24 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # Database: Neon PostgreSQL asyncpg connection string
-    # e.g. postgresql+asyncpg://user:pass@ep-cool-sample.us-east-2.aws.neon.tech/neondb?ssl=require
-    DATABASE_URL: str = "postgresql+asyncpg://neondb_owner:YOUR_NEON_PASSWORD@ep-sample-pooler.us-east-2.aws.neon.tech/neondb?ssl=require"
+    DATABASE_URL: str = ""
 
     # AI Service Keys
-    GEMINI_API_KEY: str = "AIzaSy_YOUR_REAL_GEMINI_API_KEY_HERE"
+    GEMINI_API_KEY: str = ""
 
     # Security & JWT
-    JWT_SECRET_KEY: str = "supersecret_aqvonx_jwt_signing_key_change_in_production_123456789"
+    JWT_SECRET_KEY: str = "aqvonx_jwt_secret_key_production_environment"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours (short-lived access tokens)
     ADMIN_EMAILS: List[str] = ["developer@aqvonx.com"]
 
     # Payment Gateways (Razorpay & LemonSqueezy)
-    RAZORPAY_KEY_ID: str = "rzp_test_xxxx"
-    RAZORPAY_KEY_SECRET: str = "rzp_secret_xxxx"
-    RAZORPAY_WEBHOOK_SECRET: str = "whsec_xxxx"
+    RAZORPAY_KEY_ID: str = ""
+    RAZORPAY_KEY_SECRET: str = ""
+    RAZORPAY_WEBHOOK_SECRET: str = ""
 
-    LEMONSQUEEZY_API_KEY: str = "lmsq_xxxx"
-    LEMONSQUEEZY_WEBHOOK_SECRET: str = "lmsq_whsec_xxxx"
+    LEMONSQUEEZY_API_KEY: str = ""
+    LEMONSQUEEZY_WEBHOOK_SECRET: str = ""
 
     # CORS Whitelist (Explicit origins only - never wildcard with credentials)
     ALLOWED_ORIGINS: List[str] = [
@@ -57,6 +56,8 @@ class Settings(BaseSettings):
     @property
     def is_database_configured(self) -> bool:
         """Checks if real Neon database credentials have been configured."""
+        if not self.DATABASE_URL:
+            return False
         placeholders = ["YOUR_NEON_PASSWORD", "ep-sample", "ep-xyz", "password_here", "npg_password"]
         return not any(p in self.DATABASE_URL for p in placeholders)
 

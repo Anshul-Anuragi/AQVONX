@@ -23,7 +23,7 @@ export default function NotesGPTPage() {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [copied, setCopied] = useState(false);
 
-  const sampleSVG = (
+  const architecturePreviewSVG = (
     <svg viewBox="0 0 760 170" fill="none" className="w-full h-auto">
       <defs>
         <linearGradient id="demo-grad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -145,7 +145,7 @@ export default function NotesGPTPage() {
             <div className="space-y-4">
               <span className="text-xs font-semibold text-[var(--text-main)] uppercase tracking-wider block">Generated Vector Flowchart</span>
               <div className="p-2 rounded-xl bg-black/40 border border-[var(--card-border)] flex items-center justify-center">
-                {sampleSVG}
+                {architecturePreviewSVG}
               </div>
             </div>
           </div>

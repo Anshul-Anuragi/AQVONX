@@ -54,17 +54,17 @@ async def extension_handshake(payload: ExtensionHandshakeRequest, db: AsyncSessi
     user_role = "admin" if is_admin else (payload.role or "user")
 
     if not settings.is_database_configured:
-        dummy_id = str(uuid.uuid4())
+        ephemeral_id = str(uuid.uuid4())
         plan = "admin_lifetime" if is_admin else "trial"
         expires_at = None if is_admin else (now_utc + timedelta(days=3)).isoformat()
         token = create_access_token(
-            subject=dummy_id,
+            subject=ephemeral_id,
             extra_claims={"email": clean_email, "is_pro": is_admin, "role": user_role, "plan": plan}
         )
         return ExtensionHandshakeResponse(
             access_token=token,
             token_type="bearer",
-            user_id=dummy_id,
+            user_id=ephemeral_id,
             email=clean_email,
             plan=plan,
             role=user_role,
@@ -199,15 +199,15 @@ async def extension_handshake(payload: ExtensionHandshakeRequest, db: AsyncSessi
         raise
     except Exception:
         # Graceful fallback on connection drop
-        dummy_id = str(uuid.uuid4())
+        fallback_user_id = str(uuid.uuid4())
         user_role = "admin" if clean_email in settings.ADMIN_EMAILS else "user"
         token = create_access_token(
-            subject=dummy_id,
+            subject=fallback_user_id,
             extra_claims={"email": clean_email, "is_pro": False, "role": user_role}
         )
         return ExtensionHandshakeResponse(
             access_token=token,
-            user_id=dummy_id,
+            user_id=fallback_user_id,
             email=clean_email,
             is_pro=False,
             role=user_role,

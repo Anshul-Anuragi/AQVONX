@@ -275,7 +275,7 @@ export default function LoginPage() {
                   type="email"
                   value={signInEmail}
                   onChange={(e) => setSignInEmail(e.target.value)}
-                  placeholder="developer@aqvonx.com"
+                  placeholder="name@domain.com"
                   disabled={isLoading || isGoogleLoading}
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 transition-colors"
                   required
@@ -340,7 +340,7 @@ export default function LoginPage() {
                   type="text"
                   value={signUpName}
                   onChange={(e) => setSignUpName(e.target.value)}
-                  placeholder="John Doe"
+                  placeholder="Full Name"
                   disabled={isLoading || isGoogleLoading}
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 transition-colors"
                   required
@@ -358,7 +358,7 @@ export default function LoginPage() {
                   type="email"
                   value={signUpEmail}
                   onChange={(e) => setSignUpEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder="name@domain.com"
                   disabled={isLoading || isGoogleLoading}
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 transition-colors"
                   required

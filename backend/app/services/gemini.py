@@ -124,7 +124,7 @@ You MUST return a valid JSON object matching this schema:
     def _generate_fallback(self, transcript_window: str, api_error: Optional[str] = None) -> Dict[str, Any]:
         """Provides instant high-quality structured output when keys are being configured."""
         first_line = transcript_window.strip().split("\n")[0][:80] if transcript_window else "Core Concept Overview"
-        sample_svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 180" fill="none">
+        fallback_svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 180" fill="none">
   <defs>
     <linearGradient id="n-grad" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#7305FA" />
@@ -174,7 +174,7 @@ This technical session details modern architectural execution, streaming ingest 
                 "Sub-50ms quota verification using Neon PostgreSQL unique daily constraints",
                 "Export-ready Markdown paired with dynamic vector SVG mind map"
             ],
-            "svg_flowchart": sample_svg
+            "svg_flowchart": fallback_svg
         }
 
 
