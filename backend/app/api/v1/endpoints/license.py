@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -219,6 +219,34 @@ async def get_user_status(payload: UserStatusRequest, db: AsyncSession = Depends
             daily_remaining_seconds=1200,
             daily_limit_seconds=1200,
         )
+
+
+@router.get("/status", response_model=UserStatusResponse)
+async def get_license_status_get(
+    email: Optional[str] = Query(None),
+    device_id: Optional[str] = Query(None),
+    product_id: Optional[str] = Query("notesgpt"),
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    HTTP GET endpoint for subscription & quota status inspection by Chrome extensions or dashboards.
+    Accepts query email, device_id, or Bearer Authorization token.
+    """
+    clean_email = email
+    if not clean_email and authorization:
+        try:
+            token_data = decode_token(authorization)
+            clean_email = token_data.get("email")
+        except Exception:
+            pass
+    if not clean_email and device_id:
+        clean_email = f"guest_{device_id.strip().lower()[:20]}@guest.aqvonx.internal"
+    if not clean_email:
+        clean_email = "guest@device.aqvonx.internal"
+
+    req = UserStatusRequest(email=clean_email, product_id=product_id or "notesgpt")
+    return await get_user_status(req, db)
 
 
 @router.post("/verify", response_model=LicenseVerifyResponse, dependencies=[Depends(rate_limit_handshake)])

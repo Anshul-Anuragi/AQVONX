@@ -16,17 +16,26 @@ router = APIRouter()
 
 
 class NotesGenerateRequest(BaseModel):
-    transcript_window: str = Field(..., max_length=150000, description="Transcript snippet or audio text window to summarize")
+    transcript_window: Optional[str] = Field(None, max_length=150000, description="Transcript snippet or audio text window to summarize")
+    transcript: Optional[str] = Field(None, max_length=150000, description="Full or snippet transcript")
+    video_url: Optional[str] = Field(None, max_length=2000, description="Source video URL")
     frame_base64: Optional[str] = Field(None, max_length=8000000, description="Optional raw base64 frame capture from video/tab")
-    lang: str = Field("en", max_length=10, description="Target output language code (e.g. en, hi, es, fr)")
-    include_mindmap: bool = Field(True, description="Whether to generate an SVG visual flowchart")
+    lang: Optional[str] = Field("en", max_length=10, description="Target output language code")
+    language: Optional[str] = Field(None, max_length=10, description="Alias for target language code")
+    mode: Optional[str] = Field("mindmap", description="Generation mode: mindmap, notes, summary")
+    include_mindmap: Optional[bool] = Field(True, description="Whether to generate an SVG visual flowchart")
     chunk_seconds: Optional[int] = Field(45, ge=5, le=300, description="Duration of the audio/video chunk in seconds")
 
 
 class NotesGenerateResponse(BaseModel):
+    notes_markdown: str
     markdown: str
+    text: Optional[str] = None
+    candidates: Optional[List[dict]] = None
     key_takeaways: List[str]
+    mindmap_svg: Optional[str] = None
     svg_flowchart: Optional[str] = None
+    remaining_seconds: int
     daily_remaining: int
     plan_tier: str = "trial"
 
@@ -162,17 +171,30 @@ async def generate_notes(
             daily_remaining = settings.FREE_TIER_DAILY_LIMIT - 1
 
     # 7. Secure Server-Side Gemini Inference (Client NEVER sees the API Key)
+    active_transcript = payload.transcript or payload.transcript_window or ""
+    target_lang = payload.language or payload.lang or "en"
+    should_include_mindmap = payload.include_mindmap if payload.include_mindmap is not None else (payload.mode == "mindmap")
+
     result = await gemini_service.generate_notes(
-        transcript_window=payload.transcript_window,
+        transcript_window=active_transcript,
         frame_base64=payload.frame_base64,
-        lang=payload.lang,
-        include_mindmap=payload.include_mindmap,
+        lang=target_lang,
+        include_mindmap=should_include_mindmap,
     )
 
+    notes_text = result.get("markdown", "")
+    svg_data = result.get("svg_flowchart")
+    remaining_secs = daily_remaining * 60 if not is_pro else 86400
+
     return NotesGenerateResponse(
-        markdown=result.get("markdown", ""),
+        notes_markdown=notes_text,
+        markdown=notes_text,
+        text=notes_text,
+        candidates=[{"content": {"parts": [{"text": notes_text}]}}],
         key_takeaways=result.get("key_takeaways", []),
-        svg_flowchart=result.get("svg_flowchart"),
+        mindmap_svg=svg_data,
+        svg_flowchart=svg_data,
+        remaining_seconds=remaining_secs,
         daily_remaining=daily_remaining,
         plan_tier=plan_tier,
     )

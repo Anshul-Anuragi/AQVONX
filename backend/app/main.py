@@ -40,7 +40,18 @@ app = FastAPI(
 )
 
 # CORS configuration supporting verified web clients & chrome extensions
-cors_origins = [o for o in settings.ALLOWED_ORIGINS if "*" not in o]
+cors_origins = [
+    "https://aqvonx.vercel.app",
+    "https://aqvonx.onrender.com",
+    "https://aqvonx.com",
+    "https://www.aqvonx.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+for o in settings.ALLOWED_ORIGINS:
+    if "*" not in o and o not in cors_origins:
+        cors_origins.append(o)
+
 if settings.ALLOWED_EXTENSION_IDS:
     for ext_id in settings.ALLOWED_EXTENSION_IDS:
         cors_origins.append(f"chrome-extension://{ext_id}")
@@ -50,8 +61,8 @@ app.add_middleware(
     allow_origins=cors_origins,
     allow_origin_regex=r"^chrome-extension://[a-p]{32}$",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Extension-ID", "Accept"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -80,6 +91,7 @@ async def root():
     }
 
 
+@app.get("/api/v1/health", tags=["Health"])
 @app.get("/health", tags=["Health"])
 async def health_check():
     return {

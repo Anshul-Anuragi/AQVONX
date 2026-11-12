@@ -41,6 +41,8 @@ export default function UserDashboardPage() {
   const router = useRouter();
   const [copiedToken, setCopiedToken] = useState(false);
   const [connectSuccess, setConnectSuccess] = useState(false);
+  const [ackReceived, setAckReceived] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [generatedToken, setGeneratedToken] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [subData, setSubData] = useState<SubscriptionData | null>(null);
@@ -70,33 +72,61 @@ export default function UserDashboardPage() {
     }
   }, []);
 
-  // Fetch or regenerate JWT extension token
-  const handleGenerate = useCallback(async () => {
+  // Extension ACK bridge listener
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'AQVONX_TOKEN_ACK') {
+        setAckReceived(true);
+        setTimeout(() => setAckReceived(false), 5000);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // Fetch or regenerate real JWT extension token with Render wakeup retry logic
+  const handleGenerate = useCallback(async (retries = 3, delay = 2000): Promise<string> => {
     setIsRefreshing(true);
-    try {
-      const email = session?.user?.email;
-      if (!email) return;
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
-      const res = await fetch(`${apiBase}/auth/extension-token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setGeneratedToken(data.access_token);
-      }
-    } catch {
-      // Fallback local token
-      if (!generatedToken) {
-        setGeneratedToken(
-          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3JfYXF2b254IiwiaXNfcHJvIjp0cnVlLCJyb2xlIjoidXNlciJ9.aqvonx_verified_token'
-        );
-      }
-    } finally {
+    const email = session?.user?.email || (isAdmin ? 'developer@aqvonx.com' : '');
+    if (!email) {
       setIsRefreshing(false);
+      return '';
     }
-  }, [session?.user?.email, generatedToken]);
+    const role = isAdmin ? 'admin' : (session?.user?.role || 'user');
+
+    const endpoints = [
+      '/api/v1/auth/extension-token',
+      'https://aqvonx.onrender.com/api/v1/auth/extension-token',
+    ];
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      for (const endpoint of endpoints) {
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, role, product_id: 'notesgpt' }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.access_token) {
+              setGeneratedToken(data.access_token);
+              setIsRefreshing(false);
+              return data.access_token;
+            }
+          }
+        } catch (err) {
+          console.warn(`Handshake attempt ${attempt} failed on ${endpoint}:`, err);
+        }
+      }
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, delay * attempt));
+      }
+    }
+
+    setIsRefreshing(false);
+    return '';
+  }, [session?.user?.email, session?.user?.role, isAdmin]);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -106,6 +136,22 @@ export default function UserDashboardPage() {
       handleGenerate();
     }
   }, [status, router, fetchSubscription, handleGenerate]);
+
+  // AUTO-SYNC EXTENSION ON DASHBOARD LOAD
+  useEffect(() => {
+    if (!session?.user?.email || !generatedToken) return;
+
+    const payload = {
+      type: 'AQVONX_SET_TOKEN',
+      action: 'SET_AQVONX_TOKEN',
+      token: generatedToken,
+      plan: isAdmin ? 'admin_lifetime' : (subData?.plan_tier || 'trial'),
+      role: isAdmin ? 'admin' : (session?.user?.role || 'user'),
+      email: session?.user?.email,
+    };
+
+    window.postMessage(payload, window.location.origin);
+  }, [session?.user?.email, session?.user?.role, generatedToken, isAdmin, subData?.plan_tier]);
 
   if (status === 'loading' || (status === 'authenticated' && isLoadingSub)) {
     return (
@@ -125,22 +171,41 @@ export default function UserDashboardPage() {
   }
 
   const handleCopy = () => {
+    if (!generatedToken) return;
     navigator.clipboard.writeText(generatedToken);
     setCopiedToken(true);
     setTimeout(() => setCopiedToken(false), 2000);
   };
 
-  const handleConnectExtension = () => {
-    window.postMessage(
-      {
-        type: 'AQVONX_SET_TOKEN',
-        token: generatedToken,
-        plan: isAdmin ? 'lifetime_admin' : subData?.plan_tier || 'trial',
-      },
-      window.location.origin
-    );
+  const handleConnectExtension = async () => {
+    setIsConnecting(true);
+    let tokenToSend = generatedToken;
+
+    if (!tokenToSend) {
+      const freshToken = await handleGenerate();
+      if (freshToken) {
+        tokenToSend = freshToken;
+      }
+    }
+
+    if (!tokenToSend) {
+      setIsConnecting(false);
+      return;
+    }
+
+    const payload = {
+      type: 'AQVONX_SET_TOKEN',
+      action: 'SET_AQVONX_TOKEN',
+      token: tokenToSend,
+      plan: isAdmin ? 'admin_lifetime' : (subData?.plan_tier || 'trial'),
+      role: isAdmin ? 'admin' : (session?.user?.role || 'user'),
+      email: session?.user?.email || (userEmail || 'developer@aqvonx.com'),
+    };
+
+    window.postMessage(payload, window.location.origin);
     setConnectSuccess(true);
-    setTimeout(() => setConnectSuccess(false), 3000);
+    setTimeout(() => setConnectSuccess(false), 4000);
+    setIsConnecting(false);
   };
 
   const planTier = isAdmin ? 'lifetime_admin' : (subData?.plan_tier || 'trial');
@@ -506,26 +571,48 @@ export default function UserDashboardPage() {
             </p>
           </div>
 
-          <button
-            onClick={handleConnectExtension}
-            className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shadow-lg ${
-              connectSuccess
-                ? 'bg-emerald-600 text-white shadow-emerald-600/30'
-                : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'
-            }`}
-          >
-            {connectSuccess ? (
-              <>
-                <CheckCircle className="w-4 h-4" />
-                Connected to Extension
-              </>
-            ) : (
-              <>
-                <Zap className="w-4 h-4" />
-                1-Click Connect Extension
-              </>
+          <div className="flex items-center gap-2">
+            {ackReceived && (
+              <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-mono font-bold flex items-center gap-1.5 animate-in fade-in duration-200">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                Extension Synced &amp; Verified (ACK)
+              </span>
             )}
-          </button>
+
+            <button
+              onClick={handleConnectExtension}
+              disabled={isConnecting}
+              className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shadow-lg disabled:opacity-70 ${
+                ackReceived
+                  ? 'bg-emerald-600 text-white shadow-emerald-600/40'
+                  : connectSuccess
+                  ? 'bg-purple-700 text-white shadow-purple-700/30'
+                  : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'
+              }`}
+            >
+              {isConnecting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                  Generating Real JWT...
+                </>
+              ) : ackReceived ? (
+                <>
+                  <CheckCircle className="w-4 h-4 text-emerald-300" />
+                  Extension Bridge Active
+                </>
+              ) : connectSuccess ? (
+                <>
+                  <Check className="w-4 h-4 text-purple-200" />
+                  Bridge Dispatched (Syncing...)
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  1-Click Connect Extension
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
@@ -536,7 +623,7 @@ export default function UserDashboardPage() {
             className="px-4 py-2 rounded-xl bg-white/5 border border-[var(--card-border)] text-xs text-[var(--text-main)] focus:outline-none focus:border-purple-400 sm:w-80 cursor-not-allowed opacity-80 font-mono"
           />
           <button
-            onClick={handleGenerate}
+            onClick={() => handleGenerate()}
             disabled={isRefreshing}
             className="px-4 py-2 rounded-xl border border-[var(--card-border)] hover:border-purple-400 text-xs text-[var(--text-main)] font-semibold transition flex items-center gap-1.5 justify-center"
           >

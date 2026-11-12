@@ -3,6 +3,15 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false, // Suppress X-Powered-By: Next.js header
+  async rewrites() {
+    const backendUrl = process.env.BACKEND_INTERNAL_URL || 'https://aqvonx.onrender.com';
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: `${backendUrl}/api/v1/:path*`,
+      },
+    ];
+  },
   async headers() {
     return [
       {
@@ -34,7 +43,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 https://aqvonx.com https://*.aqvonx.com; frame-ancestors 'none';",
+            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 https://aqvonx.com https://*.aqvonx.com https://aqvonx.onrender.com https://aqvonx.vercel.app; frame-ancestors 'none';",
           },
         ],
       },
