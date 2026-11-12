@@ -4,7 +4,7 @@ import re
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from typing import Dict, Any, List, Optional
-import fitz  # PyMuPDF
+import pymupdf as fitz  # PyMuPDF
 import httpx
 from app.core.config import settings
 
