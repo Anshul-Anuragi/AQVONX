@@ -86,6 +86,8 @@ SCHEMA_STATEMENTS = [
         is_banned BOOLEAN DEFAULT FALSE NOT NULL,
         created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
     );
+    """,
+    """
     ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
     """,
     # 3. NotesGPT Extension Users Table
@@ -131,6 +133,17 @@ SCHEMA_STATEMENTS = [
         created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
     );
     """,
+    # 6b. PortalSnap Extension Users Table
+    """
+    CREATE TABLE IF NOT EXISTS portalsnap_users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES auth_users(id) ON DELETE CASCADE UNIQUE,
+        plan_tier VARCHAR(30) DEFAULT 'trial',
+        scans_this_month INT DEFAULT 0,
+        last_reset_month VARCHAR(7) DEFAULT to_char(NOW(), 'YYYY-MM'),
+        plan_expires_at TIMESTAMPTZ
+    );
+    """,
     # 7. Performance Indexing
     """
     CREATE INDEX IF NOT EXISTS idx_auth_users_email ON auth_users(email);
@@ -140,9 +153,6 @@ SCHEMA_STATEMENTS = [
     """,
     """
     CREATE INDEX IF NOT EXISTS idx_notesgpt_subscriptions_user ON notesgpt_subscriptions(user_id, status);
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS idx_processed_webhooks_event ON processed_webhooks(event_id);
     """,
 ]
 
