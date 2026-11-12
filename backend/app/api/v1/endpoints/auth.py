@@ -1,12 +1,12 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_db
-from app.db.models import User, Subscription, AuthUser, NotesGPTUser
+from app.db.models import User, Subscription, AuthUser, NotesGPTUser, PortalSnapUser, EditorialLensUser
 from app.core.config import settings
 from app.core.security import create_access_token, get_current_user_token
 from app.core.rate_limit import rate_limit_handshake
@@ -92,44 +92,89 @@ async def extension_handshake(payload: ExtensionHandshakeRequest, db: AsyncSessi
         if auth_user.is_banned:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended or banned.")
 
-        # 3. Check or create NotesGPT extension user record
-        notes_stmt = select(NotesGPTUser).where(NotesGPTUser.user_id == auth_user.id)
-        notes_res = await db.execute(notes_stmt)
-        notes_user = notes_res.scalars().first()
+        # 3. Product-specific user record and quota setup
+        product_id = (payload.product_id or "notesgpt").strip().lower()
 
-        if not notes_user:
-            notes_user = NotesGPTUser(
-                user_id=auth_user.id,
-                plan_tier="pro_quarterly" if is_admin else "trial",
-                trial_start_date=now_utc,
-            )
-            db.add(notes_user)
-            await db.commit()
-            await db.refresh(notes_user)
-
-        # 4. Resolve plan, pro status, and expiration
         if is_admin or auth_user.role == "admin":
             plan = "admin_lifetime"
             is_pro = True
             expires_at_str = None
-        elif notes_user.plan_tier == "trial":
-            trial_start = notes_user.trial_start_date or now_utc
-            if (now_utc - trial_start) > timedelta(days=3):
-                plan = "trial_expired"
+        elif product_id == "editoriallens":
+            editorial_stmt = select(EditorialLensUser).where(EditorialLensUser.user_id == auth_user.id)
+            editorial_res = await db.execute(editorial_stmt)
+            editorial_user = editorial_res.scalars().first()
+            if not editorial_user:
+                editorial_user = EditorialLensUser(
+                    user_id=auth_user.id,
+                    plan_tier="free_trial",
+                )
+                db.add(editorial_user)
+                await db.commit()
+                await db.refresh(editorial_user)
+
+            if editorial_user.plan_tier in ["pro_quarterly", "pro_monthly", "pro", "basic_monthly"]:
+                plan = editorial_user.plan_tier
+                is_pro = True
+                expires_at_str = editorial_user.plan_expires_at.isoformat() if editorial_user.plan_expires_at else None
+            else:
+                plan = "free_trial"
                 is_pro = False
                 expires_at_str = None
+        elif product_id == "portalsnap":
+            portal_stmt = select(PortalSnapUser).where(PortalSnapUser.user_id == auth_user.id)
+            portal_res = await db.execute(portal_stmt)
+            portal_user = portal_res.scalars().first()
+            if not portal_user:
+                portal_user = PortalSnapUser(
+                    user_id=auth_user.id,
+                    plan_tier="trial",
+                )
+                db.add(portal_user)
+                await db.commit()
+                await db.refresh(portal_user)
+
+            if portal_user.plan_tier in ["pro_quarterly", "pro_monthly", "pro", "basic_monthly"]:
+                plan = portal_user.plan_tier
+                is_pro = True
+                expires_at_str = portal_user.plan_expires_at.isoformat() if portal_user.plan_expires_at else None
             else:
                 plan = "trial"
                 is_pro = False
-                expires_at_str = (trial_start + timedelta(days=3)).isoformat()
+                expires_at_str = None
         else:
-            plan = notes_user.plan_tier
-            is_pro = plan in ["pro_quarterly", "pro_monthly", "pro", "basic_monthly"]
-            expires_at_str = notes_user.plan_expires_at.isoformat() if notes_user.plan_expires_at else None
+            # Default to notesgpt
+            notes_stmt = select(NotesGPTUser).where(NotesGPTUser.user_id == auth_user.id)
+            notes_res = await db.execute(notes_stmt)
+            notes_user = notes_res.scalars().first()
+
+            if not notes_user:
+                notes_user = NotesGPTUser(
+                    user_id=auth_user.id,
+                    plan_tier="trial",
+                    trial_start_date=now_utc,
+                )
+                db.add(notes_user)
+                await db.commit()
+                await db.refresh(notes_user)
+
+            if notes_user.plan_tier == "trial":
+                trial_start = notes_user.trial_start_date or now_utc
+                if (now_utc - trial_start) > timedelta(days=3):
+                    plan = "trial_expired"
+                    is_pro = False
+                    expires_at_str = None
+                else:
+                    plan = "trial"
+                    is_pro = False
+                    expires_at_str = (trial_start + timedelta(days=3)).isoformat()
+            else:
+                plan = notes_user.plan_tier
+                is_pro = plan in ["pro_quarterly", "pro_monthly", "pro", "basic_monthly"]
+                expires_at_str = notes_user.plan_expires_at.isoformat() if notes_user.plan_expires_at else None
 
         token = create_access_token(
             subject=str(auth_user.id),
-            extra_claims={"email": auth_user.email, "is_pro": is_pro, "role": auth_user.role, "plan": plan}
+            extra_claims={"email": auth_user.email, "is_pro": is_pro, "role": auth_user.role, "plan": plan, "product_id": product_id}
         )
         return ExtensionHandshakeResponse(
             access_token=token,

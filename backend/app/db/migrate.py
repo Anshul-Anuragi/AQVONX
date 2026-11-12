@@ -172,6 +172,22 @@ SCHEMA_STATEMENTS = [
     """
     CREATE INDEX IF NOT EXISTS idx_portalsnap_usage_lookup ON portalsnap_usage(user_id, scan_date);
     """,
+    # 10. EditorialLens Extension Users & Daily Quotas
+    """
+    CREATE TABLE IF NOT EXISTS editoriallens_users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES auth_users(id) ON DELETE CASCADE UNIQUE,
+        plan_tier VARCHAR(50) DEFAULT 'free_trial',
+        analyses_today INTEGER DEFAULT 0,
+        last_reset_date VARCHAR(10) DEFAULT to_char(NOW(), 'YYYY-MM-DD'),
+        plan_expires_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_editoriallens_users_user_id ON editoriallens_users(user_id);
+    """,
 ]
 
 
@@ -274,6 +290,16 @@ async def run_migrations(admin_email: str, admin_name: str = "Super Admin"):
                     RETURNING id, user_id, plan_tier, plan_expires_at;
                 """)
                 await conn.execute(seed_portalsnap_sql, {"user_id": admin_id})
+
+                # Seed EditorialLens Unlimited 10-Year Pro Plan for Admin
+                seed_editoriallens_sql = text("""
+                    INSERT INTO editoriallens_users (user_id, plan_tier, analyses_today, plan_expires_at)
+                    VALUES (:user_id, 'pro_quarterly', 0, NOW() + INTERVAL '10 years')
+                    ON CONFLICT (user_id) DO UPDATE
+                    SET plan_tier = 'pro_quarterly', plan_expires_at = NOW() + INTERVAL '10 years'
+                    RETURNING id, user_id, plan_tier, plan_expires_at;
+                """)
+                await conn.execute(seed_editoriallens_sql, {"user_id": admin_id})
 
             print(
                 f"  [+] NotesGPT Pro assigned: Tier={notes_row['plan_tier']} | Expires={notes_row['plan_expires_at']}"

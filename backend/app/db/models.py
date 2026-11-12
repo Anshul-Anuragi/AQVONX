@@ -100,6 +100,7 @@ class AuthUser(Base):
     notesgpt_subscriptions = relationship("NotesGPTSubscription", back_populates="user", cascade="all, delete-orphan")
     portalsnap_user = relationship("PortalSnapUser", back_populates="user", uselist=False, cascade="all, delete-orphan")
     portalsnap_usages = relationship("PortalSnapUsage", back_populates="user", cascade="all, delete-orphan")
+    editoriallens_user = relationship("EditorialLensUser", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 class NotesGPTUser(Base):
@@ -184,6 +185,27 @@ class PortalSnapUsage(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     user = relationship("AuthUser", back_populates="portalsnap_usages")
+
+
+class EditorialLensUser(Base):
+    __tablename__ = "editoriallens_users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth_users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    plan_tier = Column(String(50), default="free_trial", nullable=False)  # 'free_trial' | 'basic_monthly' | 'pro_quarterly'
+    analyses_today = Column(Integer, default=0, nullable=False)
+    last_reset_date = Column(String(10), default=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%d"), nullable=False)
+    plan_expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user = relationship("AuthUser", back_populates="editoriallens_user")
+
 
 
 
