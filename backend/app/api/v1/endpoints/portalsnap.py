@@ -1,7 +1,7 @@
 import base64
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +9,7 @@ from sqlalchemy import select
 import httpx
 
 from app.db.session import get_db
-from app.db.models import AuthUser, PortalSnapUser
+from app.db.models import AuthUser, PortalSnapUser, PortalSnapUsage
 from app.core.config import settings
 from app.core.security import get_current_user_token
 from app.services.portalsnap_engine import run_portalsnap_multi_agent_pipeline
@@ -18,7 +18,7 @@ router = APIRouter()
 
 
 class PortalSnapScanRequest(BaseModel):
-    pdf_base64: Optional[str] = Field(None, description="Raw base64-encoded PDF bytes from browser")
+    pdf_base64: Optional[str] = Field(None, description="Raw base64-encoded PDF bytes from browser (preferred, bypasses NIC WAF)")
     pdf_url: Optional[str] = Field(None, max_length=2000, description="Public URL to recruitment notification PDF")
     candidate_profile: Dict[str, Any] = Field(
         default_factory=lambda: {
@@ -121,16 +121,18 @@ async def scan_recruitment_pdf(
                 ps_user.scans_this_month = 0
                 ps_user.last_reset_month = current_month
 
+            # Check plan tier in DB
             if ps_user.plan_tier in ["basic_monthly", "pro_quarterly", "pro"]:
-                is_pro = True
-                plan_tier = ps_user.plan_tier
-                remaining_scans = 9999
-            else:
-                # Free Trial: 3 scans per month
+                if ps_user.plan_expires_at and ps_user.plan_expires_at > datetime.now(timezone.utc):
+                    is_pro = True
+                    plan_tier = ps_user.plan_tier
+                    remaining_scans = 9999
+
+            if not is_pro:
                 if ps_user.scans_this_month >= 3:
                     raise HTTPException(
                         status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                        detail="Monthly free limit of 3 PDF scans reached. Upgrade to PortalSnap Pro ($4.99/mo) for unlimited PSU & Govt exam scans.",
+                        detail="Monthly free limit of 3 PDF scans reached. Upgrade to PortalSnap Pro (₹99/mo) for unlimited PSU & Govt exam scans.",
                     )
                 ps_user.scans_this_month += 1
                 remaining_scans = max(0, 3 - ps_user.scans_this_month)
@@ -140,69 +142,95 @@ async def scan_recruitment_pdf(
         except HTTPException:
             raise
         except Exception as e:
-            # Fallback if DB transient
+            # Fallback on DB drop
             pass
 
-    # Resolve PDF Bytes
+    # Extract raw PDF bytes
     pdf_bytes: Optional[bytes] = None
 
     if payload.pdf_base64:
-        clean_b64 = payload.pdf_base64.strip()
-        if "data:application/pdf;base64," in clean_b64:
-            clean_b64 = clean_b64.split("data:application/pdf;base64,", 1)[1]
-        elif ";base64," in clean_b64:
-            clean_b64 = clean_b64.split(";base64,", 1)[1]
+        clean_b64 = payload.pdf_base64
+        if "base64," in clean_b64:
+            clean_b64 = clean_b64.split("base64,")[1]
         try:
             pdf_bytes = base64.b64decode(clean_b64)
         except Exception:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid base64 encoding for PDF.",
+                detail="Invalid base64 encoding in pdf_base64 payload.",
             )
     elif payload.pdf_url:
         try:
-            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-                resp = await client.get(payload.pdf_url)
+            async with httpx.AsyncClient(timeout=25.0, follow_redirects=True) as client:
+                resp = await client.get(
+                    payload.pdf_url,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0"}
+                )
                 if resp.status_code == 200:
                     pdf_bytes = resp.content
                 else:
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Failed to fetch PDF from URL (HTTP {resp.status_code}).",
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Target recruitment portal returned status {resp.status_code} when downloading notification PDF.",
                     )
         except HTTPException:
             raise
         except Exception as e:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Network error fetching PDF from URL: {str(e)}",
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to fetch PDF from URL: {str(e)}",
             )
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Either pdf_base64 or a valid pdf_url must be provided.",
+            detail="Either pdf_base64 or pdf_url must be provided in request body.",
         )
 
     if not pdf_bytes or len(pdf_bytes) < 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Empty or corrupted PDF payload received.",
+            detail="Empty or corrupted PDF document stream.",
         )
 
-    # Execute Multi-Agent Pipeline
+    # Run the 3-stage multi-agent pipeline
     try:
-        result = await run_portalsnap_multi_agent_pipeline(
+        pipeline_result = await run_portalsnap_multi_agent_pipeline(
             pdf_bytes=pdf_bytes,
             candidate_profile=payload.candidate_profile,
             is_pro=is_pro,
         )
-        result["remaining_scans"] = remaining_scans
-        result["plan_tier"] = plan_tier
-        return result
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"PortalSnap Engine processing failed: {str(e)}",
         )
+
+    # Record scan in usage ledger if DB configured
+    if settings.is_database_configured and user_id_str:
+        try:
+            scan_log = PortalSnapUsage(
+                user_id=uuid.UUID(user_id_str),
+                scan_date=datetime.now(timezone.utc).date(),
+                organization_name=pipeline_result.get("organization_name", "Official Notification")[:250],
+                verdict=pipeline_result.get("eligibility", {}).get("verdict_badge", "ELIGIBLE"),
+            )
+            db.add(scan_log)
+            await db.commit()
+        except Exception:
+            pass
+
+    return PortalSnapScanResponse(
+        status="success",
+        organization_name=pipeline_result.get("organization_name", "Official Notification"),
+        post_title=pipeline_result.get("post_title", "Recruitment Notification"),
+        total_vacancies=pipeline_result.get("total_vacancies", "Refer to notification"),
+        application_fee=pipeline_result.get("application_fee", "Refer to notification"),
+        important_dates=pipeline_result.get("important_dates", {}),
+        selection_process=pipeline_result.get("selection_process", ""),
+        eligibility=pipeline_result.get("eligibility", {}),
+        hidden_footnote_traps=pipeline_result.get("hidden_footnote_traps", []),
+        document_checklist=pipeline_result.get("document_checklist", []),
+        extra_syllabus_topics=pipeline_result.get("extra_syllabus_topics", []),
+        remaining_scans=remaining_scans,
+        plan_tier=plan_tier,
+    )

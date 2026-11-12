@@ -4,7 +4,7 @@ import re
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from typing import Dict, Any, List, Optional
-import pymupdf as fitz  # PyMuPDF
+import fitz  # PyMuPDF
 import httpx
 from app.core.config import settings
 
@@ -41,7 +41,7 @@ def extract_page_tagged_markdown(pdf_bytes: bytes, max_pages: int = 85) -> str:
     'Lost in the Middle' or hallucinate page citations.
     """
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    relevant_Keywords = re.compile(
+    relevant_keywords = re.compile(
         r"(eligib|age\s*limit|relaxation|qualific|branch|discipline|cutoff|crucial\s*date|"
         r"as\s*on|vacanc|gate|b\.?tech|b\.?e\.?|not\s*eligible|final\s*year|cgpa|percentage|"
         r"application\s*fee|important\s*date|annexure|caste|obc|ews)",
@@ -57,7 +57,7 @@ def extract_page_tagged_markdown(pdf_bytes: bytes, max_pages: int = 85) -> str:
         text = page.get_text("text")
 
         # Always keep first 5 pages, last 3 pages, or any page matching recruitment rules
-        if page_num <= 5 or page_num >= (total_pages - 2) or relevant_Keywords.search(text):
+        if page_num <= 5 or page_num >= (total_pages - 2) or relevant_keywords.search(text):
             # Extract tables cleanly if present on page
             table_md = ""
             try:
@@ -138,17 +138,25 @@ def evaluate_deterministic_eligibility(
             age_eligible = False
 
     # 2. Branch & IT-vs-CS Exclusion Check
-    allowed_branches = [b.upper() for b in extracted_rules.get("eligible_branches", [])]
-    excluded_branches = [b.upper() for b in extracted_rules.get("explicitly_excluded_branches", [])]
+    def normalize_branch(b_str: str) -> str:
+        b_low = b_str.lower().strip()
+        for code, aliases in BRANCH_ALIASES.items():
+            if any(alias == b_low or alias in b_low or b_low in alias for alias in aliases):
+                return code
+        return b_str.upper().strip()
+
+    norm_user_branch = normalize_branch(user_branch)
+    allowed_branches = [normalize_branch(b) for b in extracted_rules.get("eligible_branches", [])]
+    excluded_branches = [normalize_branch(b) for b in extracted_rules.get("explicitly_excluded_branches", [])]
 
     branch_eligible = True
     branch_warning = None
-    if user_branch in excluded_branches:
+    if norm_user_branch in excluded_branches or user_branch in excluded_branches:
         branch_eligible = False
         branch_warning = f"Your branch ({user_branch}) is explicitly excluded in footnotes."
-    elif allowed_branches and user_branch not in allowed_branches:
+    elif allowed_branches and (norm_user_branch not in allowed_branches and user_branch not in allowed_branches):
         # Check if CS is allowed but IT is not mentioned
-        if user_branch == "IT" and "CS" in allowed_branches and "IT" not in allowed_branches:
+        if norm_user_branch == "IT" and "CS" in allowed_branches and "IT" not in allowed_branches:
             branch_eligible = False
             branch_warning = "Notification lists Computer Science (CS) but omits Information Technology (IT). Verify equivalences."
         else:
@@ -297,7 +305,7 @@ Respond ONLY with a valid JSON object matching this exact structure (no markdown
                     clean_json = raw_json.strip()
                     if clean_json.startswith("```json"):
                         clean_json = clean_json[7:]
-                    if clean_json.startswith("```"):
+                    elif clean_json.startswith("```"):
                         clean_json = clean_json[3:]
                     if clean_json.endswith("```"):
                         clean_json = clean_json[:-3]

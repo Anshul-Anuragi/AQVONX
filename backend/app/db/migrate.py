@@ -133,7 +133,17 @@ SCHEMA_STATEMENTS = [
         created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
     );
     """,
-    # 6b. PortalSnap Extension Users Table
+    # 7. Performance Indexing
+    """
+    CREATE INDEX IF NOT EXISTS idx_auth_users_email ON auth_users(email);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_notesgpt_usage_lookup ON notesgpt_usage(user_id, usage_date);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_notesgpt_subscriptions_user ON notesgpt_subscriptions(user_id, status);
+    """,
+    # 8. PortalSnap Extension Users & Monthly Quotas
     """
     CREATE TABLE IF NOT EXISTS portalsnap_users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -144,15 +154,23 @@ SCHEMA_STATEMENTS = [
         plan_expires_at TIMESTAMPTZ
     );
     """,
-    # 7. Performance Indexing
+    # 9. PortalSnap Scan Usage Ledger & Indexing
     """
-    CREATE INDEX IF NOT EXISTS idx_auth_users_email ON auth_users(email);
+    CREATE TABLE IF NOT EXISTS portalsnap_usage (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+        scan_date DATE DEFAULT CURRENT_DATE NOT NULL,
+        pdf_name VARCHAR(255),
+        organization_name VARCHAR(255),
+        verdict VARCHAR(50),
+        created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    );
     """,
     """
-    CREATE INDEX IF NOT EXISTS idx_notesgpt_usage_lookup ON notesgpt_usage(user_id, usage_date);
+    CREATE INDEX IF NOT EXISTS idx_portalsnap_users_user_id ON portalsnap_users(user_id);
     """,
     """
-    CREATE INDEX IF NOT EXISTS idx_notesgpt_subscriptions_user ON notesgpt_subscriptions(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_portalsnap_usage_lookup ON portalsnap_usage(user_id, scan_date);
     """,
 ]
 
@@ -185,19 +203,26 @@ async def run_migrations(admin_email: str, admin_name: str = "Super Admin"):
     )
 
     try:
-        async with engine.begin() as conn:
-            print("[*] Executing DDL Schema Statements...")
-
+        print("[*] Executing DDL Schema Statements...")
+        async with engine.connect() as conn:
             for idx, stmt in enumerate(SCHEMA_STATEMENTS, 1):
                 clean_stmt = stmt.strip()
                 first_line = clean_stmt.splitlines()[0]
-                await conn.execute(text(clean_stmt))
-                print(f"  [+] ({idx}/{len(SCHEMA_STATEMENTS)}) {first_line}")
+                try:
+                    async with conn.begin():
+                        await conn.execute(text(clean_stmt))
+                    print(f"  [+] ({idx}/{len(SCHEMA_STATEMENTS)}) {first_line}")
+                except Exception as e:
+                    if "already exists" in str(e).lower() or "must be owner" in str(e).lower():
+                        print(f"  [~] ({idx}/{len(SCHEMA_STATEMENTS)}) Skipped (non-critical): {first_line}")
+                    else:
+                        raise e
 
             # Grant table permissions to aqvonx_app if role exists
             try:
-                await conn.execute(text("GRANT ALL ON ALL TABLES IN SCHEMA public TO aqvonx_app;"))
-                await conn.execute(text("GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO aqvonx_app;"))
+                async with conn.begin():
+                    await conn.execute(text("GRANT ALL ON ALL TABLES IN SCHEMA public TO aqvonx_app;"))
+                    await conn.execute(text("GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO aqvonx_app;"))
             except Exception:
                 pass
 
@@ -215,29 +240,40 @@ async def run_migrations(admin_email: str, admin_name: str = "Super Admin"):
                 RETURNING id, email, role, created_at;
             """)
 
-            res = await conn.execute(
-                seed_admin_sql,
-                {"email": admin_email.strip().lower(), "full_name": admin_name},
-            )
-            admin_row = res.mappings().first()
+            async with conn.begin():
+                res = await conn.execute(
+                    seed_admin_sql,
+                    {"email": admin_email.strip().lower(), "full_name": admin_name},
+                )
+                admin_row = res.mappings().first()
 
-            if not admin_row:
-                raise RuntimeError("Failed to retrieve admin user record.")
+                if not admin_row:
+                    raise RuntimeError("Failed to retrieve admin user record.")
 
-            admin_id = admin_row["id"]
-            print(f"  [+] Super-admin verified: ID={admin_id} | Role={admin_row['role']}")
+                admin_id = admin_row["id"]
+                print(f"  [+] Super-admin verified: ID={admin_id} | Role={admin_row['role']}")
 
-            # Seed NotesGPT Unlimited 10-Year Pro Plan for Admin
-            seed_notesgpt_sql = text("""
-                INSERT INTO notesgpt_users (user_id, plan_tier, plan_expires_at)
-                VALUES (:user_id, 'pro_quarterly', NOW() + INTERVAL '10 years')
-                ON CONFLICT (user_id) DO UPDATE
-                SET plan_tier = 'pro_quarterly', plan_expires_at = NOW() + INTERVAL '10 years'
-                RETURNING id, user_id, plan_tier, plan_expires_at;
-            """)
+                # Seed NotesGPT Unlimited 10-Year Pro Plan for Admin
+                seed_notesgpt_sql = text("""
+                    INSERT INTO notesgpt_users (user_id, plan_tier, plan_expires_at)
+                    VALUES (:user_id, 'pro_quarterly', NOW() + INTERVAL '10 years')
+                    ON CONFLICT (user_id) DO UPDATE
+                    SET plan_tier = 'pro_quarterly', plan_expires_at = NOW() + INTERVAL '10 years'
+                    RETURNING id, user_id, plan_tier, plan_expires_at;
+                """)
 
-            res_notes = await conn.execute(seed_notesgpt_sql, {"user_id": admin_id})
-            notes_row = res_notes.mappings().first()
+                res_notes = await conn.execute(seed_notesgpt_sql, {"user_id": admin_id})
+                notes_row = res_notes.mappings().first()
+
+                # Seed PortalSnap Unlimited 10-Year Pro Plan for Admin
+                seed_portalsnap_sql = text("""
+                    INSERT INTO portalsnap_users (user_id, plan_tier, scans_this_month, plan_expires_at)
+                    VALUES (:user_id, 'pro_quarterly', 0, NOW() + INTERVAL '10 years')
+                    ON CONFLICT (user_id) DO UPDATE
+                    SET plan_tier = 'pro_quarterly', plan_expires_at = NOW() + INTERVAL '10 years'
+                    RETURNING id, user_id, plan_tier, plan_expires_at;
+                """)
+                await conn.execute(seed_portalsnap_sql, {"user_id": admin_id})
 
             print(
                 f"  [+] NotesGPT Pro assigned: Tier={notes_row['plan_tier']} | Expires={notes_row['plan_expires_at']}"

@@ -99,6 +99,7 @@ class AuthUser(Base):
     notesgpt_usages = relationship("NotesGPTUsage", back_populates="user", cascade="all, delete-orphan")
     notesgpt_subscriptions = relationship("NotesGPTSubscription", back_populates="user", cascade="all, delete-orphan")
     portalsnap_user = relationship("PortalSnapUser", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    portalsnap_usages = relationship("PortalSnapUsage", back_populates="user", cascade="all, delete-orphan")
 
 
 class NotesGPTUser(Base):
@@ -169,5 +170,20 @@ class PortalSnapUser(Base):
     plan_expires_at = Column(DateTime(timezone=True), nullable=True)
 
     user = relationship("AuthUser", back_populates="portalsnap_user")
+
+
+class PortalSnapUsage(Base):
+    __tablename__ = "portalsnap_usage"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    scan_date = Column(Date, default=lambda: datetime.now(timezone.utc).date(), nullable=False)
+    pdf_name = Column(String(255), nullable=True)
+    organization_name = Column(String(255), nullable=True)
+    verdict = Column(String(50), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    user = relationship("AuthUser", back_populates="portalsnap_usages")
+
 
 
