@@ -36,6 +36,65 @@ interface SubscriptionData {
   daily_limit_seconds: number;
 }
 
+function InlineTierPill({ tier }: { tier: 'FREE' | 'BASIC' | 'PRO' | 'ADMIN' | string }) {
+  const normalizedTier = (tier || 'FREE').toUpperCase();
+
+  if (normalizedTier === 'ADMIN') {
+    return (
+      <span
+        style={{
+          background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+          color: '#ffffff',
+        }}
+        className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full uppercase shadow-sm inline-flex items-center"
+      >
+        ADMIN
+      </span>
+    );
+  }
+
+  if (normalizedTier === 'PRO') {
+    return (
+      <span
+        style={{
+          background: 'linear-gradient(135deg, #8b5cf6, #10b981)',
+          color: '#ffffff',
+        }}
+        className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full uppercase shadow-sm inline-flex items-center"
+      >
+        PRO
+      </span>
+    );
+  }
+
+  if (normalizedTier === 'BASIC') {
+    return (
+      <span
+        style={{
+          background: 'linear-gradient(135deg, #0ea5e9, #10b981)',
+          color: '#ffffff',
+        }}
+        className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full uppercase shadow-sm inline-flex items-center"
+      >
+        BASIC
+      </span>
+    );
+  }
+
+  return (
+    <span
+      style={{
+        background: 'rgba(6, 182, 212, 0.15)',
+        color: '#22d3ee',
+        border: '1px solid rgba(6, 182, 212, 0.3)',
+      }}
+      className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full uppercase inline-flex items-center"
+    >
+      FREE
+    </span>
+  );
+}
+
 export default function UserDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -277,14 +336,13 @@ export default function UserDashboardPage() {
               Workspace Account
             </span>
             {isAdmin ? (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40 uppercase font-bold flex items-center gap-1">
-                <Crown className="w-3 h-3 text-amber-300" />
-                Super Admin
-              </span>
+              <InlineTierPill tier="ADMIN" />
+            ) : subData?.is_pro ? (
+              <InlineTierPill tier="PRO" />
+            ) : subData?.plan_tier === 'basic_monthly' ? (
+              <InlineTierPill tier="BASIC" />
             ) : (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono tracking-wider bg-white/10 text-[var(--text-muted)] uppercase">
-                Subscriber
-              </span>
+              <InlineTierPill tier="FREE" />
             )}
           </div>
           <h1 className="font-editorial text-4xl sm:text-5xl text-[var(--text-main)] mt-1 font-normal">
@@ -297,24 +355,38 @@ export default function UserDashboardPage() {
 
         {/* Dynamic Status Header Pill */}
         {isAdmin ? (
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-purple-500/40 bg-purple-500/10 text-purple-300 text-xs font-mono shadow-sm shadow-purple-500/20">
-            <Crown className="w-3.5 h-3.5 text-amber-300" />
-            <span>Active (Permanent)</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-purple-500/40 bg-purple-500/10 text-xs font-mono">
+            <InlineTierPill tier="ADMIN" />
+            <span className="text-purple-300 font-medium">Permanent Access</span>
           </div>
         ) : planTier === 'trial_expired' ? (
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs font-mono">
-            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-            <span>Trial Expired</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs font-mono">
+            <span
+              style={{
+                background: 'rgba(244, 63, 94, 0.15)',
+                color: '#fb7185',
+                border: '1px solid rgba(244, 63, 94, 0.3)',
+              }}
+              className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full uppercase inline-flex items-center"
+            >
+              EXPIRED
+            </span>
+            <span className="text-rose-400 font-medium">Trial Ended</span>
           </div>
         ) : planTier === 'trial' ? (
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-mono">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
-            <span>3-Day Trial Active</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-xs font-mono">
+            <InlineTierPill tier="FREE" />
+            <span className="text-cyan-300 font-medium">{subData?.trial_days_remaining ?? 3}d Left</span>
+          </div>
+        ) : planTier === 'basic_monthly' ? (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs font-mono">
+            <InlineTierPill tier="BASIC" />
+            <span className="text-emerald-300 font-medium">Active</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Subscription Active</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-purple-500/40 bg-purple-500/10 text-xs font-mono">
+            <InlineTierPill tier="PRO" />
+            <span className="text-purple-300 font-medium">Active</span>
           </div>
         )}
       </div>
@@ -334,39 +406,60 @@ export default function UserDashboardPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {EXTENSIONS_REGISTRY.map((ext: ExtensionConfig) => {
-            const Icon = ext.icon;
             const isNotesGPT = ext.id === 'notesgpt';
+            const isPortalSnap = ext.id === 'portalsnap';
+            const isEditorialLens = ext.id === 'editoriallens';
+
+            const brandName =
+              isNotesGPT ? 'NotesGPT' :
+              isPortalSnap ? 'PortalSnap' :
+              isEditorialLens ? 'EditorialLens' :
+              ext.name.replace(/ Studio| Pro| AI| Shield/g, '');
+
+            let cardTier: 'ADMIN' | 'PRO' | 'BASIC' | 'FREE' = 'FREE';
+
+            if (isAdmin) {
+              cardTier = 'ADMIN';
+            } else if (isNotesGPT) {
+              if (planTier === 'basic_monthly') {
+                cardTier = 'BASIC';
+              } else if (planTier === 'pro_quarterly' || subData?.is_pro) {
+                cardTier = 'PRO';
+              } else {
+                cardTier = 'FREE';
+              }
+            } else {
+              if (subData?.is_pro) {
+                cardTier = 'PRO';
+              } else {
+                cardTier = 'FREE';
+              }
+            }
+
+            const isPaidActive = isAdmin || cardTier === 'ADMIN' || cardTier === 'PRO' || cardTier === 'BASIC';
+            const isExpired = isNotesGPT && planTier === 'trial_expired';
+            const showUpgradeButton = !isPaidActive && (cardTier === 'FREE' || planTier === 'trial' || isExpired);
 
             // Color scheme classes
             const colorMap = {
               purple: {
                 border: 'border-purple-500/40',
-                iconBg: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
-                text: 'text-purple-400',
                 bar: 'bg-purple-500',
               },
               cyan: {
                 border: 'border-cyan-500/40',
-                iconBg: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
-                text: 'text-cyan-400',
                 bar: 'bg-cyan-500',
               },
               emerald: {
                 border: 'border-emerald-500/40',
-                iconBg: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-                text: 'text-emerald-400',
                 bar: 'bg-emerald-500',
               },
               amber: {
                 border: 'border-amber-500/40',
-                iconBg: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
-                text: 'text-amber-400',
                 bar: 'bg-amber-500',
               },
               blue: {
                 border: 'border-blue-500/40',
-                iconBg: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
-                text: 'text-blue-400',
                 bar: 'bg-blue-500',
               },
             };
@@ -387,60 +480,29 @@ export default function UserDashboardPage() {
                 }`}
               >
                 <div>
-                  {/* Card Header: Icon & Dynamic Badge */}
-                  <div className="flex justify-between items-start">
-                    <div className={`p-2.5 rounded-xl border ${colors.iconBg}`}>
-                      <Icon className="w-4 h-4" />
+                  {/* Card Header: Brand Name + Inline Tier Pill (NO LOGO BOX) */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <h3 className="text-lg font-bold text-[var(--text-main)] tracking-tight">
+                        {brandName}
+                      </h3>
+                      <InlineTierPill tier={cardTier} />
                     </div>
-
-                    {/* Badge Resolution */}
-                    {isAdmin ? (
-                      <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-purple-500/25 text-purple-200 border border-purple-500/50 font-bold tracking-wide flex items-center gap-1 shadow-sm shadow-purple-500/30">
-                        <Zap className="w-3 h-3 text-amber-300" />
-                        LIFETIME ADMIN (PERMANENT)
-                      </span>
-                    ) : isNotesGPT ? (
-                      planTier === 'trial_expired' ? (
-                        <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold tracking-wide">
-                          TRIAL EXPIRED
-                        </span>
-                      ) : planTier === 'trial' ? (
-                        <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold tracking-wide">
-                          3-DAY FREE TRIAL
-                        </span>
-                      ) : planTier === 'basic_monthly' ? (
-                        <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold tracking-wide">
-                          BASIC ACTIVE
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-purple-500/25 text-purple-300 border border-purple-500/50 font-bold tracking-wide shadow-sm shadow-purple-500/40">
-                          PRO ACTIVE
-                        </span>
-                      )
-                    ) : ext.status === 'in_labs' ? (
+                    {ext.status === 'in_labs' && !isAdmin && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-[var(--text-muted)] font-bold">
                         IN LABS
                       </span>
-                    ) : ext.status === 'coming_soon' ? (
+                    )}
+                    {ext.status === 'coming_soon' && !isAdmin && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-[var(--text-muted)] font-bold">
                         COMING SOON
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/10 text-[var(--text-muted)] font-bold">
-                        FREE TIER
                       </span>
                     )}
                   </div>
 
-                  {/* Title & Tagline */}
-                  <div className="mt-4">
-                    <h3 className="text-lg font-bold text-[var(--text-main)]">
-                      {ext.name}
-                    </h3>
-                    <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
-                      {ext.desc}
-                    </p>
-                  </div>
+                  <p className="text-xs text-[var(--text-muted)] mt-2 leading-relaxed">
+                    {ext.desc}
+                  </p>
 
                   {/* Quota Progress / Metrics */}
                   <div className="space-y-1.5 pt-4">
@@ -461,6 +523,8 @@ export default function UserDashboardPage() {
                         ) : (
                           <span className="text-purple-300 font-bold">Unlimited Pro Quota</span>
                         )
+                      ) : cardTier === 'PRO' ? (
+                        <span className="text-purple-300 font-bold">Unlimited Pro Quota</span>
                       ) : (
                         <span className="text-[var(--text-main)] font-bold">
                           {ext.defaultFreeQuota}
@@ -483,7 +547,7 @@ export default function UserDashboardPage() {
                           <div className={`${colors.bar} h-full w-full`} />
                         )
                       ) : (
-                        <div className={`${colors.bar} h-full ${ext.status === 'active' ? 'w-[70%]' : 'w-[20%]'}`} />
+                        <div className={`${colors.bar} h-full ${cardTier === 'PRO' ? 'w-full' : ext.status === 'active' ? 'w-[70%]' : 'w-[20%]'}`} />
                       )}
                     </div>
                   </div>
@@ -529,23 +593,13 @@ export default function UserDashboardPage() {
                     )}
                   </div>
 
-                  {/* Prominent Action Buttons for Regular Users */}
-                  {!isAdmin && isNotesGPT && planTier === 'trial' && (
+                  {/* Prominent Action Button: Only visible on FREE or EXPIRED */}
+                  {showUpgradeButton && (
                     <Link
-                      href="/pricing/notesgpt"
+                      href={ext.pricingHref}
                       className="mt-2 w-full py-2 px-3 rounded-lg text-center text-xs font-semibold bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white shadow-sm transition flex items-center justify-center gap-1.5"
                     >
-                      Upgrade to Unlimited Pro ($6.99 / $14.99)
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  )}
-
-                  {!isAdmin && isNotesGPT && planTier === 'trial_expired' && (
-                    <Link
-                      href="/pricing/notesgpt"
-                      className="mt-2 w-full py-2 px-3 rounded-lg text-center text-xs font-semibold bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white shadow-sm transition flex items-center justify-center gap-1.5"
-                    >
-                      Activate Basic ($6.99) or Pro ($14.99)
+                      {isExpired ? 'Activate Basic or Pro Plan' : 'Upgrade to Pro'}
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   )}

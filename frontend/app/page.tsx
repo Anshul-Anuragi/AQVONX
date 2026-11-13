@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Sparkles, ShieldCheck, Zap, FileSearch } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { AQVONXLogoMark } from '@/components/logo';
 
 export default function HomePage() {
@@ -42,14 +42,22 @@ export default function HomePage() {
 
       {/* Low-Opacity Glass Product Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full pt-12">
-        {/* Card 1 */}
+        {/* Card 1: NotesGPT */}
         <div className="glass-card p-7 text-left space-y-4 relative overflow-hidden group">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
-            <Zap className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <h3 className="text-xl font-bold text-[var(--text-main)] tracking-tight">
+              NotesGPT
+            </h3>
+            <span
+              style={{
+                background: 'linear-gradient(135deg, #8b5cf6, #10b981)',
+                color: '#ffffff',
+              }}
+              className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full uppercase shadow-sm inline-flex items-center"
+            >
+              PRO
+            </span>
           </div>
-          <h3 className="text-xl font-bold text-[var(--text-main)] tracking-tight">
-            NotesGPT
-          </h3>
           <p className="text-sm text-[var(--text-muted)] leading-relaxed">
             Multimodal frame capture for YouTube, Udemy, and Coursera. Converts complex whiteboards into structured bilingual study notes and interactive Edraw-style mind maps.
           </p>
@@ -64,14 +72,22 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Card 2 */}
+        {/* Card 2: PortalSnap */}
         <div className="glass-card p-7 text-left space-y-4 relative overflow-hidden group">
-          <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-            <FileSearch className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <h3 className="text-xl font-bold text-[var(--text-main)] tracking-tight">
+              PortalSnap
+            </h3>
+            <span
+              style={{
+                background: 'linear-gradient(135deg, #8b5cf6, #10b981)',
+                color: '#ffffff',
+              }}
+              className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full uppercase shadow-sm inline-flex items-center"
+            >
+              PRO
+            </span>
           </div>
-          <h3 className="text-xl font-bold text-[var(--text-main)] tracking-tight">
-            PortalSnap
-          </h3>
           <p className="text-sm text-[var(--text-muted)] leading-relaxed">
             Evaluates 60-page PSU &amp; Central Government notification PDFs against your exact degree, age, and reservation criteria in seconds.
           </p>
@@ -86,24 +102,33 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Card 3 */}
+        {/* Card 3: EditorialLens */}
         <div className="glass-card p-7 text-left space-y-4 relative overflow-hidden group">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <ShieldCheck className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <h3 className="text-xl font-bold text-[var(--text-main)] tracking-tight">
+              EditorialLens
+            </h3>
+            <span
+              style={{
+                background: 'linear-gradient(135deg, #8b5cf6, #10b981)',
+                color: '#ffffff',
+              }}
+              className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full uppercase shadow-sm inline-flex items-center"
+            >
+              PRO
+            </span>
           </div>
-          <h3 className="text-xl font-bold text-[var(--text-main)] tracking-tight">
-            Centralized Auth &amp; API Gate
-          </h3>
           <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-            Hardware-locked JWT license verification with Neon PostgreSQL and Razorpay UPI subscriptions. Completely protected against local unpacking and bypasses.
+            UPSC CSE, State PSC &amp; RBI Grade B newspaper editorial synthesizer. Generates 250-word Mains blueprints, real Supreme Court case laws, and Prelims trap questions.
           </p>
-          <div className="pt-2">
+          <div className="pt-2 flex items-center justify-between">
             <Link
-              href="/docs"
+              href="/extensions/editoriallens"
               className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
             >
-              View Security Architecture →
+              Editorial Synthesizer →
             </Link>
+            <span className="text-[11px] font-mono text-[var(--text-muted)]">$8.99/mo</span>
           </div>
         </div>
       </div>
