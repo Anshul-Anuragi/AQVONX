@@ -188,6 +188,23 @@ SCHEMA_STATEMENTS = [
     """
     CREATE INDEX IF NOT EXISTS idx_editoriallens_users_user_id ON editoriallens_users(user_id);
     """,
+    # 11. BidSniper AI Extension Users & Monthly Quotas
+    """
+    CREATE TABLE IF NOT EXISTS bidsniper_users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES auth_users(id) ON DELETE CASCADE UNIQUE,
+        plan_tier VARCHAR(50) DEFAULT 'free_trial',
+        proposals_this_month INTEGER DEFAULT 0,
+        last_reset_month VARCHAR(7) DEFAULT to_char(NOW(), 'YYYY-MM'),
+        portfolio_json TEXT DEFAULT '[]',
+        plan_expires_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_bidsniper_users_user_id ON bidsniper_users(user_id);
+    """,
 ]
 
 
@@ -300,6 +317,16 @@ async def run_migrations(admin_email: str, admin_name: str = "Super Admin"):
                     RETURNING id, user_id, plan_tier, plan_expires_at;
                 """)
                 await conn.execute(seed_editoriallens_sql, {"user_id": admin_id})
+
+                # Seed BidSniper Unlimited 10-Year Pro Plan for Admin
+                seed_bidsniper_sql = text("""
+                    INSERT INTO bidsniper_users (user_id, plan_tier, proposals_this_month, plan_expires_at)
+                    VALUES (:user_id, 'pro_quarterly', 0, NOW() + INTERVAL '10 years')
+                    ON CONFLICT (user_id) DO UPDATE
+                    SET plan_tier = 'pro_quarterly', plan_expires_at = NOW() + INTERVAL '10 years'
+                    RETURNING id, user_id, plan_tier, plan_expires_at;
+                """)
+                await conn.execute(seed_bidsniper_sql, {"user_id": admin_id})
 
             print(
                 f"  [+] NotesGPT Pro assigned: Tier={notes_row['plan_tier']} | Expires={notes_row['plan_expires_at']}"

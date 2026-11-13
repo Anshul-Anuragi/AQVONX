@@ -4,6 +4,7 @@ import {
   Newspaper, 
   FileText, 
   ShieldAlert,
+  Target,
   type LucideIcon 
 } from 'lucide-react';
 
@@ -57,11 +58,23 @@ export const EXTENSIONS_REGISTRY: ExtensionConfig[] = [
     icon: Newspaper,
     pricingHref: '/pricing/editoriallens',
     docsHref: '/docs/editoriallens',
-    status: 'in_labs',
+    status: 'active',
     themeColor: 'emerald',
-    defaultFreeQuota: 'Early Labs Preview',
-    defaultFreeQuotaLabel: 'Queue Access',
-    queuePosition: 14,
+    defaultFreeQuota: '2 analyses / day',
+    defaultFreeQuotaLabel: 'Daily Free Analyses',
+  },
+  {
+    id: 'bidsniper',
+    name: 'BidSniper AI',
+    tagline: 'Upwork & Fiverr Proposal & Client Intel Co-Pilot',
+    desc: 'Uncovers hidden client names from reviews, calculates 0-100 deal health, and writes 150-word anti-AI proposals.',
+    icon: Target,
+    pricingHref: '/pricing/bidsniper',
+    docsHref: '/docs/bidsniper',
+    status: 'active',
+    themeColor: 'amber',
+    defaultFreeQuota: '5 proposals / month',
+    defaultFreeQuotaLabel: 'Monthly Proposals',
   },
   {
     id: 'docusynth',

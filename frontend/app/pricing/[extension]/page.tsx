@@ -170,6 +170,55 @@ const EXTENSION_PRICING: Record<string, ExtensionDetailPricing> = {
       ctaHref: '/dashboard',
     },
   },
+  bidsniper: {
+    id: 'bidsniper',
+    name: 'BidSniper AI',
+    tagline: 'Upwork & Fiverr proposal & client intel co-pilot with deal health scoring and architecture diagrams.',
+    freeTier: {
+      name: 'Free Trial',
+      price: '$0',
+      period: '/ month',
+      subtitle: '5 proposals per month',
+      features: [
+        '5 full Client Intel & Proposal generations/mo',
+        'Deterministic client name regex scanner',
+        '0-100 Deal Health & Red-Flag Evaluator',
+        'Anti-AI 150-word proposal generation',
+      ],
+      ctaText: 'Start Free Trial',
+      ctaHref: '/dashboard',
+    },
+    basicTier: {
+      name: 'Basic Monthly',
+      price: '$12.99',
+      period: '/ month',
+      subtitle: 'Billed monthly with UPI or Card',
+      features: [
+        '50 high-conversion proposal syntheses/mo',
+        'Full client feedback and red-flag scanner',
+        'Screening question answer generator',
+        'Portfolio RAG skill matcher (up to 10 projects)',
+      ],
+      ctaText: 'Activate Basic ($12.99/mo)',
+      ctaHref: '/dashboard',
+    },
+    proTier: {
+      name: 'Pro Unlimited',
+      price: '$19.00',
+      period: '/ month',
+      subtitle: 'Best value · For high-earning freelancers & agencies',
+      isPopular: true,
+      features: [
+        'Unlimited proposals & client intel scans',
+        'Instant 4-layer System Architecture Diagram generator',
+        'Dynamic Milestone & Bid Price Estimator',
+        'Unlimited portfolio project RAG repository',
+        'Fastest Gemini Flash inference speed',
+      ],
+      ctaText: 'Activate Pro ($19.00/mo)',
+      ctaHref: '/dashboard',
+    },
+  },
 };
 
 export async function generateStaticParams() {
@@ -177,6 +226,7 @@ export async function generateStaticParams() {
     { extension: 'notesgpt' },
     { extension: 'portalsnap' },
     { extension: 'editoriallens' },
+    { extension: 'bidsniper' },
   ];
 }
 

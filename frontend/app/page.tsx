@@ -41,7 +41,7 @@ export default function HomePage() {
       </div>
 
       {/* Low-Opacity Glass Product Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full pt-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full pt-12">
         {/* Card 1: NotesGPT */}
         <div className="glass-card p-7 text-left space-y-4 relative overflow-hidden group">
           <div className="flex items-center gap-2.5">
@@ -129,6 +129,36 @@ export default function HomePage() {
               Editorial Synthesizer →
             </Link>
             <span className="text-[11px] font-mono text-[var(--text-muted)]">$8.99/mo</span>
+          </div>
+        </div>
+
+        {/* Card 4: BidSniper */}
+        <div className="glass-card p-7 text-left space-y-4 relative overflow-hidden group">
+          <div className="flex items-center gap-2.5">
+            <h3 className="text-xl font-bold text-[var(--text-main)] tracking-tight">
+              BidSniper
+            </h3>
+            <span
+              style={{
+                background: 'linear-gradient(135deg, #8b5cf6, #10b981)',
+                color: '#ffffff',
+              }}
+              className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full uppercase shadow-sm inline-flex items-center"
+            >
+              PRO
+            </span>
+          </div>
+          <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+            Upwork &amp; Fiverr proposal co-pilot. Extracts hidden client names from past reviews, scores deal health, and writes 150-word anti-AI proposals.
+          </p>
+          <div className="pt-2 flex items-center justify-between">
+            <Link
+              href="/pricing/bidsniper"
+              className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1"
+            >
+              Proposal Architect →
+            </Link>
+            <span className="text-[11px] font-mono text-[var(--text-muted)]">$19.00/mo</span>
           </div>
         </div>
       </div>

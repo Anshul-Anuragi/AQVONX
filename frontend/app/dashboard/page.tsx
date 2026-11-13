@@ -409,11 +409,13 @@ export default function UserDashboardPage() {
             const isNotesGPT = ext.id === 'notesgpt';
             const isPortalSnap = ext.id === 'portalsnap';
             const isEditorialLens = ext.id === 'editoriallens';
+            const isBidSniper = ext.id === 'bidsniper';
 
             const brandName =
               isNotesGPT ? 'NotesGPT' :
               isPortalSnap ? 'PortalSnap' :
               isEditorialLens ? 'EditorialLens' :
+              isBidSniper ? 'BidSniper' :
               ext.name.replace(/ Studio| Pro| AI| Shield/g, '');
 
             let cardTier: 'ADMIN' | 'PRO' | 'BASIC' | 'FREE' = 'FREE';

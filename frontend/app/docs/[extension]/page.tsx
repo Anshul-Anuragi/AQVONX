@@ -16,6 +16,7 @@ export async function generateStaticParams() {
     { extension: "notesgpt" },
     { extension: "portalsnap" },
     { extension: "editoriallens" },
+    { extension: "bidsniper" },
   ];
 }
 

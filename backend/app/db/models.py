@@ -3,6 +3,7 @@ from datetime import datetime, date, timezone
 from sqlalchemy import (
     Column,
     String,
+    Text,
     Boolean,
     Integer,
     Date,
@@ -101,6 +102,7 @@ class AuthUser(Base):
     portalsnap_user = relationship("PortalSnapUser", back_populates="user", uselist=False, cascade="all, delete-orphan")
     portalsnap_usages = relationship("PortalSnapUsage", back_populates="user", cascade="all, delete-orphan")
     editoriallens_user = relationship("EditorialLensUser", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    bidsniper_user = relationship("BidSniperUser", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 class NotesGPTUser(Base):
@@ -205,6 +207,27 @@ class EditorialLensUser(Base):
     )
 
     user = relationship("AuthUser", back_populates="editoriallens_user")
+
+
+class BidSniperUser(Base):
+    __tablename__ = "bidsniper_users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth_users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    plan_tier = Column(String(50), default="free_trial", nullable=False)
+    proposals_this_month = Column(Integer, default=0, nullable=False)
+    last_reset_month = Column(String(7), default=lambda: datetime.now(timezone.utc).strftime("%Y-%m"), nullable=False)
+    portfolio_json = Column(Text, default="[]", nullable=False)
+    plan_expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user = relationship("AuthUser", back_populates="bidsniper_user")
 
 
 

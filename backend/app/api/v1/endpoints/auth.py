@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_db
-from app.db.models import User, Subscription, AuthUser, NotesGPTUser, PortalSnapUser, EditorialLensUser
+from app.db.models import User, Subscription, AuthUser, NotesGPTUser, PortalSnapUser, EditorialLensUser, BidSniperUser
 from app.core.config import settings
 from app.core.security import create_access_token, get_current_user_token
 from app.core.rate_limit import rate_limit_handshake
@@ -116,6 +116,27 @@ async def extension_handshake(payload: ExtensionHandshakeRequest, db: AsyncSessi
                 plan = editorial_user.plan_tier
                 is_pro = True
                 expires_at_str = editorial_user.plan_expires_at.isoformat() if editorial_user.plan_expires_at else None
+            else:
+                plan = "free_trial"
+                is_pro = False
+                expires_at_str = None
+        elif product_id == "bidsniper":
+            sniper_stmt = select(BidSniperUser).where(BidSniperUser.user_id == auth_user.id)
+            sniper_res = await db.execute(sniper_stmt)
+            sniper_user = sniper_res.scalars().first()
+            if not sniper_user:
+                sniper_user = BidSniperUser(
+                    user_id=auth_user.id,
+                    plan_tier="free_trial",
+                )
+                db.add(sniper_user)
+                await db.commit()
+                await db.refresh(sniper_user)
+
+            if sniper_user.plan_tier in ["pro_quarterly", "pro_monthly", "pro", "basic_monthly"]:
+                plan = sniper_user.plan_tier
+                is_pro = True
+                expires_at_str = sniper_user.plan_expires_at.isoformat() if sniper_user.plan_expires_at else None
             else:
                 plan = "free_trial"
                 is_pro = False
