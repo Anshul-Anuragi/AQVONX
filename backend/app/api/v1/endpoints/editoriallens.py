@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -34,6 +34,7 @@ class MainsEvaluateRequest(BaseModel):
 @router.post("/synthesize")
 async def synthesize_editorial(
     payload: EditorialSynthesizeRequest,
+    response: Response,
     token_data: dict = Depends(get_current_user_token),
     db: AsyncSession = Depends(get_db),
     x_extension_id: Optional[str] = Header(None, alias="X-Extension-ID"),
@@ -46,6 +47,10 @@ async def synthesize_editorial(
     4. Fetches concurrent Constitutional Articles, SC Judgments, and Commissions via Wikipedia/Tavily.
     5. Calls Gemini model cascade to synthesize 250-word blueprint, prelims MCQs, and mains questions.
     """
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     user_id_str = token_data.get("sub")
     if not user_id_str:
         raise HTTPException(
@@ -144,6 +149,7 @@ async def synthesize_editorial(
 @router.post("/evaluate-mains")
 async def evaluate_mains(
     payload: MainsEvaluateRequest,
+    response: Response,
     token_data: dict = Depends(get_current_user_token),
     db: AsyncSession = Depends(get_db),
     x_extension_id: Optional[str] = Header(None, alias="X-Extension-ID"),
@@ -153,6 +159,10 @@ async def evaluate_mains(
     using UPSC grading criteria, checking structural flow, constitutional citations,
     committee references, and data points.
     """
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     user_id_str = token_data.get("sub")
     if not user_id_str:
         raise HTTPException(

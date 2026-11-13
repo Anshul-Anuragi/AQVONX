@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -6,114 +7,53 @@ from typing import Dict, Any, List, Optional
 import httpx
 from app.core.config import settings
 
-# Deterministic UPSC CSE Mains Syllabus Keyword & Paper Classification Matrix
-UPSC_SYLLABUS_MATRIX = {
-    "GS-1 (Society, History & Geography)": [
-        "urbanization", "population", "women empowerment", "caste", "secularism", "communalism",
-        "regionalism", "monsoon", "cyclone", "el nino", "glacier", "heritage", "colonial", "tribal"
-    ],
-    "GS-2 (Polity, Governance, Constitution & IR)": [
-        "constitution", "supreme court", "governor", "parliament", "federalism", "article ",
-        "election commission", "cag", "schedule", "fundamental rights", "directive principles",
-        "judiciary", "collegium", "bilateral", "indo-pacific", "unsc", "g20", "brics", "wto",
-        "welfare", "panchayat", "municipality", "representation of people", "defection"
-    ],
-    "GS-3 (Economy, Agriculture, Environment & Security)": [
-        "gdp", "inflation", "rbi", "monetary policy", "fiscal deficit", "gst", "msp", "agriculture",
-        "food processing", "supply chain", "semiconductor", "infrastructure", "renewable", "cop28",
-        "cop29", "climate change", "biodiversity", "eia", "cyber security", "money laundering",
-        "naxalism", "terrorism", "border", "isro", "biotechnology", "artificial intelligence"
-    ],
-    "GS-4 (Ethics, Integrity & Aptitude)": [
-        "ethics", "morality", "probity", "corruption", "whistleblower", "conflict of interest",
-        "empathy", "compassion", "corporate governance", "emotional intelligence", "civil service"
-    ],
+# High-Precision UPSC CSE Mains Syllabus & Micro-Topic Anchor Matrix
+UPSC_MICRO_SYLLABUS = {
+    "GS-1": {
+        "paper": "GS Paper I — Heritage, History, Society & Geography",
+        "anchors": [
+            "Salient features of Indian Society, Diversity of India",
+            "Role of women and women's organization, population and associated issues, urbanization",
+            "Effects of globalization on Indian society",
+            "Social empowerment, communalism, regionalism & secularism",
+            "Salient features of world's physical geography & Geophysical phenomena (earthquakes, cyclones, monsoon)",
+        ],
+    },
+    "GS-2": {
+        "paper": "GS Paper II — Polity, Constitution, Governance, Social Justice & IR",
+        "anchors": [
+            "Indian Constitution: historical underpinnings, evolution, features, amendments, basic structure",
+            "Functions and responsibilities of the Union and the States, federal structure, devolution of powers",
+            "Separation of powers between various organs, dispute redressal mechanisms",
+            "Parliament and State legislatures: structure, functioning, conduct of business, powers & privileges",
+            "Appointment to various Constitutional posts, powers, functions (Governor, EC, CAG, UPSC)",
+            "Government policies and interventions for development, Welfare schemes for vulnerable sections",
+            "Role of Civil Services in a democracy, e-Governance, transparency & accountability (RTI, Citizen Charters)",
+            "India and its neighborhood relations; Bilateral, regional and global groupings (Quad, BRICS, G20, UN)",
+        ],
+    },
+    "GS-3": {
+        "paper": "GS Paper III — Economy, Agriculture, Science & Tech, Environment & Internal Security",
+        "anchors": [
+            "Indian Economy and issues relating to planning, mobilization of resources, growth, development and employment",
+            "Inclusive growth and issues arising from it; Government Budgeting & Fiscal Policy",
+            "Major crops, cropping patterns, e-technology in the aid of farmers, MSP, Public Distribution System (PDS)",
+            "Infrastructure: Energy, Ports, Roads, Airports, Railways; Investment models (PPP)",
+            "Achievements of Indians in science & technology; Indigenization of technology (ISRO, DRDO, AI, Biotech)",
+            "Conservation, environmental pollution and degradation, environmental impact assessment (EIA), Climate Change",
+            "Linkages between development and spread of extremism; Cyber security, Money-laundering & Border management",
+        ],
+    },
+    "GS-4": {
+        "paper": "GS Paper IV — Ethics, Integrity & Aptitude",
+        "anchors": [
+            "Ethics and Human Interface: Essence, determinants and consequences of Ethics in human actions",
+            "Attitude, Emotional Intelligence, and Foundational values for Civil Service (integrity, impartiality, empathy)",
+            "Public/Civil service values and Ethics in Public administration: ethical dilemmas, conflict of interest",
+            "Probity in Governance: Philosophical basis of governance, Information sharing, Codes of Conduct, Citizen's Charters",
+        ],
+    },
 }
-
-
-def deterministic_syllabus_pre_tagger(title: str, body: str) -> List[str]:
-    """
-    Deterministic keyword scanner that pre-identifies candidate UPSC GS Papers
-    before the LLM refines the exact sub-topic.
-    """
-    combined = f"{title} {body[:4000]}".lower()
-    matched_papers: List[str] = []
-    for paper, keywords in UPSC_SYLLABUS_MATRIX.items():
-        score = sum(1 for kw in keywords if kw in combined)
-        if score >= 2:
-            matched_papers.append(paper)
-    return matched_papers or ["GS-2 (Polity, Governance, Constitution & IR)"]
-
-
-async def fetch_wikipedia_static_context(queries: List[str]) -> List[Dict[str, str]]:
-    """
-    Agent 2A: Queries the official Wikipedia REST/Action API concurrently for
-    Constitutional Articles, Supreme Court Judgments, and Commissions.
-    100% Free, zero API key required, zero hallucination.
-    """
-    results: List[Dict[str, str]] = []
-    headers = {"User-Agent": "AQVONX-EditorialLens/1.0 (https://aqvonx.vercel.app)"}
-
-    async with httpx.AsyncClient(timeout=8.0, headers=headers) as client:
-        for q in queries[:3]:
-            try:
-                search_url = "https://en.wikipedia.org/w/api.php"
-                params = {
-                    "action": "query",
-                    "list": "search",
-                    "srsearch": f"{q} India constitution OR supreme court OR committee",
-                    "utf8": "",
-                    "format": "json",
-                    "srlimit": 2,
-                }
-                resp = await client.get(search_url, params=params)
-                if resp.status_code == 200:
-                    search_items = resp.json().get("query", {}).get("search", [])
-                    for item in search_items:
-                        clean_snippet = re.sub(r"<[^>]+>", "", item.get("snippet", "")).strip()
-                        title = item.get("title", "")
-                        if title and clean_snippet:
-                            results.append({
-                                "source": f"Wikipedia: {title}",
-                                "fact": clean_snippet,
-                                "url": f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}",
-                            })
-            except Exception:
-                continue
-    return results
-
-
-async def fetch_tavily_enrichment(query: str) -> List[Dict[str, str]]:
-    """
-    Agent 2B: Optional Tavily Search enrichment if TAVILY_API_KEY is configured in environment.
-    Pulls latest PRS Legislative Research / PIB / Supreme Court citations.
-    """
-    tavily_key = os.getenv("TAVILY_API_KEY", "").strip()
-    if not tavily_key:
-        return []
-
-    results: List[Dict[str, str]] = []
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                "https://api.tavily.com/search",
-                json={
-                    "api_key": tavily_key,
-                    "query": f"{query} UPSC Constitutional Article Supreme Court judgment committee India",
-                    "search_depth": "basic",
-                    "max_results": 3,
-                },
-            )
-            if resp.status_code == 200:
-                for item in resp.json().get("results", []):
-                    results.append({
-                        "source": item.get("title", "Official Reference"),
-                        "fact": item.get("content", "")[:350],
-                        "url": item.get("url", ""),
-                    })
-    except Exception:
-        pass
-    return results
 
 
 def _clean_json_response(raw_text: str) -> str:
@@ -123,84 +63,185 @@ def _clean_json_response(raw_text: str) -> str:
     return cleaned.strip()
 
 
+async def fetch_wikipedia_static_context(queries: List[str]) -> List[Dict[str, str]]:
+    """
+    Concurrently queries Wikipedia Action API for exact Constitutional Articles,
+    Acts, Supreme Court Judgments, and Commissions mentioned or implied by the editorial.
+    """
+    results: List[Dict[str, str]] = []
+    seen_titles = set()
+    headers = {"User-Agent": "AQVONX-EditorialLens/2.0 (https://aqvonx.vercel.app)"}
+
+    async with httpx.AsyncClient(timeout=7.5, headers=headers) as client:
+        for q in queries[:3]:
+            try:
+                resp = await client.get(
+                    "https://en.wikipedia.org/w/api.php",
+                    params={
+                        "action": "query",
+                        "list": "search",
+                        "srsearch": q,
+                        "utf8": "",
+                        "format": "json",
+                        "srlimit": 2,
+                    },
+                )
+                if resp.status_code == 200:
+                    for item in resp.json().get("query", {}).get("search", []):
+                        title = item.get("title", "")
+                        if title and title not in seen_titles:
+                            seen_titles.add(title)
+                            snippet = re.sub(r"<[^>]+>", "", item.get("snippet", "")).strip()
+                            results.append({
+                                "source": f"Wikipedia: {title}",
+                                "fact": snippet,
+                                "url": f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}",
+                            })
+            except Exception:
+                continue
+    return results
+
+
+async def fetch_tavily_enrichment(query: str) -> List[Dict[str, str]]:
+    tavily_key = os.getenv("TAVILY_API_KEY", "").strip()
+    if not tavily_key:
+        return []
+    results: List[Dict[str, str]] = []
+    try:
+        async with httpx.AsyncClient(timeout=8.5) as client:
+            resp = await client.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": tavily_key,
+                    "query": f"{query} India UPSC Constitutional Article Supreme Court judgment committee PRS",
+                    "search_depth": "basic",
+                    "max_results": 3,
+                },
+            )
+            if resp.status_code == 200:
+                for item in resp.json().get("results", []):
+                    results.append({
+                        "source": item.get("title", "PRS / Official Source"),
+                        "fact": item.get("content", "")[:380],
+                        "url": item.get("url", ""),
+                    })
+    except Exception:
+        pass
+    return results
+
+
 async def run_editoriallens_multi_agent_pipeline(
     article_title: str,
     article_text: str,
     source_url: str,
     target_exam: str = "UPSC CSE"
 ) -> Dict[str, Any]:
-    """
-    Executes the 3-Stage EditorialLens Pipeline:
-    1. Deterministic UPSC Syllabus Pre-Classifier + Entity Keyword Extractor
-    2. Concurrent Wikipedia + Tavily Static Knowledge Retriever (Articles, SC Cases, Committees)
-    3. Agent 3 (Mains 250-Word Synthesizer & Tough Prelims Statement-MCQ Builder)
-    """
-    clean_text = article_text.strip()[:25000]
-    candidate_papers = deterministic_syllabus_pre_tagger(article_title, clean_text)
+    clean_text = article_text.strip()[:28000]
+    article_fingerprint = hashlib.sha256(f"{source_url}::{article_title}::{clean_text[:500]}".encode("utf-8")).hexdigest()[:12]
 
-    # Extract high-signal query terms from the title for static knowledge lookup
-    title_words = [w for w in re.findall(r"[A-Za-z]{4,}", article_title) if w.lower() not in {"with", "from", "that", "this", "what", "when", "india", "indian", "editorial", "hindu", "express"}]
-    primary_query = " ".join(title_words[:5]) or article_title[:60]
+    # Build targeted research queries from headline + opening paragraph
+    headline_terms = [
+        w for w in re.findall(r"[A-Za-z]{4,}", f"{article_title} {clean_text[:300]}")
+        if w.lower() not in {"with", "from", "that", "this", "what", "when", "have", "been", "will", "more", "than", "into", "over", "after", "before", "hindu", "express", "editorial", "opinion"}
+    ]
+    q_base = " ".join(headline_terms[:6]) or article_title[:70]
 
-    # Run Wikipedia & Tavily lookups in parallel
-    wiki_task = fetch_wikipedia_static_context([primary_query, f"{primary_query} Supreme Court"])
-    tavily_task = fetch_tavily_enrichment(primary_query)
+    wiki_task = fetch_wikipedia_static_context([
+        f"{q_base} India Constitution Supreme Court",
+        f"{q_base} Committee Commission Act India"
+    ])
+    tavily_task = fetch_tavily_enrichment(q_base)
     wiki_facts, tavily_facts = await asyncio.gather(wiki_task, tavily_task)
-    verified_static_refs = (tavily_facts + wiki_facts)[:5]
+    verified_static_refs = (tavily_facts + wiki_facts)[:6]
 
-    system_prompt = """You are EditorialLens, an elite UPSC CSE, State PSC, and RBI Grade B multi-agent synthesizer.
-Newspaper editorials only discuss yesterday's political or economic news. Your job is to transform the article into high-scoring exam ammunition by injecting exact Constitutional Articles, Supreme Court Judgments, Official Committees, and Verified Data.
+    system_prompt = """You are EditorialLens Pro, India's #1 UPSC CSE, State PSC, and RBI Grade B Topper Workbench.
+Your mission is to analyze the EXACT provided newspaper article and convert it into high-scoring, zero-fluff exam notes that make a serious UPSC aspirant feel grateful.
 
-Respond ONLY with a valid JSON object matching this exact schema (no markdown code fences):
+CRITICAL ACCURACY RULES:
+1. Analyze ONLY the specific article provided in the prompt. Every single point must be grounded in the article's actual subject matter plus verified Indian constitutional/statutory/economic facts.
+2. NEVER hallucinate fake article numbers or fake case names. Use exact Constitutional Articles, real Supreme Court judgments (with years), real 2nd ARC / Law Commission / Parliamentary Standing Committee reports, and real official data (Economic Survey, RBI, NFHS-5, NITI Aayog, NCRB, IPCC).
+3. Include a 'prelims_rapid_facts' array highlighting sneaky Prelims traps (e.g., 'Which ministry/body?', 'Constitutional vs Statutory body?', 'Binding vs Not binding?').
+4. Include a 'pyq_linkage' object showing how UPSC has asked about this theme in Past Year Prelims/Mains Questions.
+5. Include a 'mains_flowchart' object (center hub + 4 spoke nodes) so the student can draw a quick box diagram in their real paper to get +1.5 extra marks.
+
+Respond ONLY with a valid JSON object matching this exact schema:
 {
-  "gs_paper": "e.g., GS Paper 2 — Polity & Governance",
-  "syllabus_subtopic": "e.g., Functions and responsibilities of the Union and the States; Issues and challenges pertaining to the federal structure",
-  "core_thesis_one_liner": "Sharp 1-sentence core takeaway of the editorial",
+  "gs_paper": "GS Paper II — Polity & Governance (or GS-I / GS-III / GS-IV)",
+  "syllabus_subtopic": "Exact UPSC Mains syllabus line item",
+  "exam_relevance_rating": "HIGH YIELD (Mains + Prelims)",
+  "reading_time_saved": "Saves ~35 mins of manual note-making",
+  "core_thesis_one_liner": "Crystal-clear 1-sentence crux of the author's argument",
+  "context_why_in_news": "2 crisp sentences explaining the immediate trigger event in the article",
+  "pyq_linkage": {
+    "past_question": "Actual or closely mirrored UPSC Mains/Prelims PYQ on this theme with year (e.g., UPSC Mains 2022 GS-2)",
+    "examiner_angle": "Why UPSC repeatedly targets this theme and what angle to focus on"
+  },
+  "prelims_rapid_facts": [
+    {
+      "fact_label": "e.g., Constitutional Status / Nodal Ministry / Legal Provision",
+      "exact_detail": "Exact factual rule for Prelims revision",
+      "prelims_trap_warning": "Common trap UPSC sets in statement questions (e.g., 'Not defined in the Constitution', 'Only Parliament, not State Legislature')"
+    }
+  ],
   "static_exam_linkages": {
     "constitutional_articles": [
-      {"article": "Article 200", "relevance": "Governor's assent to Bills passed by State Legislature"}
+      {"article": "Exact Article / Schedule / Act", "relevance": "How it directly governs this issue"}
     ],
     "supreme_court_judgments": [
-      {"case_name": "State of Punjab vs Principal Secretary to the Governor (2023)", "ruling": "Governor cannot exercise pocket veto to indefinitely withhold assent"}
+      {"case_name": "Case Name (Year)", "ruling": "Core doctrine or ratio decidendi laid down by SC"}
     ],
     "committees_and_reports": [
-      {"name": "Sarkaria Commission (1988) & Punchhi Commission (2010)", "recommendation": "Fixed time limit of 6 months for Governor to decide on bills"}
+      {"name": "Commission / Committee / 2nd ARC Report", "recommendation": "Specific actionable recommendation to quote in Way Forward"}
     ],
     "key_data_and_stats": [
-      "Official NFHS / Economic Survey / RBI / NITI Aayog statistic relevant to the topic"
+      "Exact verified statistic with source (e.g., RBI / Economic Survey / NITI Aayog / UN Report) to quote in Mains Intro"
+    ]
+  },
+  "mains_flowchart": {
+    "diagram_title": "Title for a 30-second Mains Exam Box Flowchart",
+    "center_hub": "Core Theme (3-5 words)",
+    "spokes": [
+      {"dimension": "Constitutional / Legal", "detail": "Short 5-word point"},
+      {"dimension": "Economic / Institutional", "detail": "Short 5-word point"},
+      {"dimension": "Social / Federal Impact", "detail": "Short 5-word point"},
+      {"dimension": "Reform / Way Forward", "detail": "Short 5-word point"}
     ]
   },
   "mains_250_word_blueprint": {
-    "introduction": "30-40 word crisp introduction defining the issue with a Constitutional Article or official data stat.",
+    "introduction": "35-40 word topper-style introduction starting with a Constitutional Article, definition, or official data point.",
     "arguments_in_favor": [
-      "Point 1 with bold keyword header",
-      "Point 2 with bold keyword header",
-      "Point 3 with bold keyword header"
+      "Keyword Header: Explanation with concrete example from the article",
+      "Keyword Header: Explanation with institutional/policy impact",
+      "Keyword Header: Explanation with long-term strategic benefit"
     ],
     "challenges_and_criticisms": [
-      "Challenge 1 with constitutional/economic impact",
-      "Challenge 2 with institutional impact",
-      "Challenge 3 with grassroots impact"
+      "Keyword Header: Structural/legal bottleneck explained clearly",
+      "Keyword Header: Implementation or fiscal challenge",
+      "Keyword Header: Federal/ethical/social concern"
     ],
     "way_forward": [
-      "Actionable reform 1 (citing a Committee recommendation)",
-      "Actionable reform 2 (institutional/legal change)",
-      "Actionable reform 3 (long-term structural solution)"
+      "Short-Term Reform: Specific institutional or statutory fix (citing a Committee)",
+      "Medium-Term Reform: Capacity building or procedural reform",
+      "Long-Term Vision: Structural alignment with Constitutional morality / SDGs"
     ],
-    "conclusion": "25-35 word balanced, forward-looking conclusion linking to Constitutional morality or SDG goals."
+    "conclusion": "30-word balanced, optimistic topper conclusion."
   },
+  "key_vocabulary_and_keywords": [
+    "3 to 5 high-scoring Mains keywords from this topic (e.g., 'Cooperative Federalism', 'Constitutional Morality', 'Fiscal Consolidation')"
+  ],
   "practice_mains_question": {
-    "question": "Realistic 15-mark (250 words) UPSC Mains question based on this editorial.",
-    "directive_word": "Critically Examine / Discuss / Analyze",
+    "question": "Realistic 15-mark (250 words) UPSC Mains question tailored to this exact editorial.",
+    "directive_word": "Critically Analyze / Discuss / Examine",
+    "directive_meaning": "1-line tip on how to address this specific directive word",
     "marks": 15
   },
   "prelims_statement_mcqs": [
     {
-      "question_stem": "Consider the following statements regarding [Topic]:",
+      "question_stem": "Consider the following statements regarding [Specific Topic from Article]:",
       "statements": [
-        "1. Statement one testing a tricky constitutional or factual detail.",
-        "2. Statement two testing an institutional mandate or exception.",
-        "3. Statement three testing a recent amendment or judgment."
+        "1. First statement testing an exact constitutional, statutory, or institutional rule.",
+        "2. Second statement testing a nuanced exception or trap.",
+        "3. Third statement testing a related factual provision."
       ],
       "options": [
         "A) Only one statement is correct",
@@ -209,13 +250,13 @@ Respond ONLY with a valid JSON object matching this exact schema (no markdown co
         "D) None of the statements are correct"
       ],
       "correct_option": "B",
-      "detailed_explanation": "Statement 1 is correct because... Statement 2 is correct... Statement 3 is incorrect because..."
+      "detailed_explanation": "Statement 1 is correct because... Statement 2 is correct because... Statement 3 is incorrect because..."
     },
     {
-      "question_stem": "With reference to [Related Static Concept], consider the following statements:",
+      "question_stem": "With reference to [Key Concept/Body in the Editorial], consider the following statements:",
       "statements": [
-        "1. First statement...",
-        "2. Second statement..."
+        "1. Statement one...",
+        "2. Statement two..."
       ],
       "options": [
         "A) 1 only",
@@ -224,10 +265,20 @@ Respond ONLY with a valid JSON object matching this exact schema (no markdown co
         "D) Neither 1 nor 2"
       ],
       "correct_option": "C",
-      "detailed_explanation": "Clear breakdown of why each statement is right or wrong."
+      "detailed_explanation": "Detailed statement-by-statement verification."
     }
   ]
 }"""
+
+    user_prompt = (
+        f"ARTICLE FINGERPRINT ID: {article_fingerprint}\n"
+        f"TARGET EXAM: {target_exam}\n"
+        f"SOURCE URL: {source_url}\n"
+        f"ARTICLE HEADLINE: {article_title}\n\n"
+        f"UPSC SYLLABUS REFERENCE MATRIX:\n{json.dumps(UPSC_MICRO_SYLLABUS, indent=2)}\n\n"
+        f"VERIFIED EXTERNAL RESEARCH CONTEXT (Wikipedia / PRS / Tavily):\n{json.dumps(verified_static_refs, indent=2)}\n\n"
+        f"FULL NEWSPAPER EDITORIAL TEXT TO ANALYZE:\n{clean_text}"
+    )
 
     api_key = settings.GEMINI_API_KEY
     models_to_try = [
@@ -242,23 +293,14 @@ Respond ONLY with a valid JSON object matching this exact schema (no markdown co
     synthesized: Optional[Dict[str, Any]] = None
     last_error = ""
 
-    user_prompt = (
-        f"Target Exam: {target_exam}\n"
-        f"Pre-Identified Candidate GS Papers: {', '.join(candidate_papers)}\n"
-        f"Source URL: {source_url}\n"
-        f"Article Headline: {article_title}\n\n"
-        f"VERIFIED STATIC RESEARCH CONTEXT (Wikipedia / Tavily):\n{json.dumps(verified_static_refs, indent=2)}\n\n"
-        f"NEWSPAPER EDITORIAL BODY:\n{clean_text}"
-    )
-
-    async with httpx.AsyncClient(timeout=65.0) as client:
+    async with httpx.AsyncClient(timeout=70.0) as client:
         for model_name in models_to_try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
             payload = {
                 "systemInstruction": {"parts": [{"text": system_prompt}]},
                 "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
                 "generationConfig": {
-                    "temperature": 0.15,
+                    "temperature": 0.2,
                     "responseMimeType": "application/json",
                 },
             }
@@ -278,6 +320,7 @@ Respond ONLY with a valid JSON object matching this exact schema (no markdown co
         raise RuntimeError(f"EditorialLens synthesis failed: {last_error}")
 
     synthesized["status"] = "success"
+    synthesized["article_fingerprint"] = article_fingerprint
     synthesized["article_title"] = article_title
     synthesized["source_url"] = source_url
     synthesized["verified_external_references"] = verified_static_refs
@@ -289,22 +332,22 @@ async def evaluate_mains_answer(
     student_answer: str,
     editorial_context: str = ""
 ) -> Dict[str, Any]:
-    """
-    Pro Feature: Grades a student's typed Mains answer out of 10 marks against
-    UPSC evaluation parameters (Introduction, Constitutional/Static Citations,
-    Multi-dimensional Coverage, Way Forward, Word Limit).
-    """
-    system_prompt = """You are a senior UPSC CSE Mains Examiner. Evaluate the candidate's answer strictly and constructively out of 10 marks.
+    system_prompt = """You are a senior UPSC CSE Mains Examiner. Evaluate the candidate's answer strictly out of 10 marks (or 15 marks scaled to 10) across 4 parameters: Introduction, Body & Multidimensionality, Value-Addition (Articles/SC Cases/Data), and Way Forward.
 Respond ONLY with valid JSON matching this schema:
 {
-  "score_out_of_10": 6.5,
-  "verdict_summary": "Good structural flow, but lacks specific Supreme Court case citations and data in the introduction.",
-  "strengths": ["Clear subheadings", "Balanced way forward"],
+  "score_out_of_10": 7.0,
+  "parameter_scores": {
+    "intro_and_context": "2.0 / 2.5",
+    "multidimensional_body": "2.5 / 3.5",
+    "citations_and_data": "1.0 / 2.0",
+    "way_forward_and_conclusion": "1.5 / 2.0"
+  },
+  "verdict_summary": "Constructive 2-sentence feedback on the answer's structure and depth.",
+  "strengths": ["Specific strength 1", "Specific strength 2"],
   "missing_ammunition": [
-    "Should have cited Article 200 and Sarkaria Commission",
-    "Include NFHS-5 or Economic Survey data point in intro"
+    "Exact Article, Supreme Court case, Committee, or Data point the student missed"
   ],
-  "model_improved_paragraph": "A rewritten 80-word high-scoring core body paragraph demonstrating how a Rank-1 topper would write it."
+  "model_improved_paragraph": "A rewritten 90-word Rank-1 topper body paragraph showing how to weave constitutional articles, data, and committee names effortlessly."
 }"""
 
     api_key = settings.GEMINI_API_KEY
@@ -328,7 +371,7 @@ Respond ONLY with valid JSON matching this schema:
                         "role": "user",
                         "parts": [
                             {
-                                "text": f"Mains Question: {question}\nContext: {editorial_context[:3000]}\n\nCandidate's Answer:\n{student_answer[:5000]}"
+                                "text": f"Mains Question: {question}\nEditorial Context: {editorial_context[:3500]}\n\nCandidate's Answer:\n{student_answer[:6000]}"
                             }
                         ],
                     }
